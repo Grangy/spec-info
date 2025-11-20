@@ -1,18 +1,18 @@
 #!/bin/bash
 # Скрипт для запуска ngrok туннеля
 
-echo "🚀 Запуск ngrok туннеля для порта 3000..."
+echo "🚀 Запуск ngrok туннеля для порта 3032..."
 echo ""
 
 # Проверяем, запущен ли уже ngrok
-if pgrep -f "ngrok http 3000" > /dev/null; then
+if pgrep -f "ngrok http 3032" > /dev/null; then
     echo "⚠️  ngrok уже запущен!"
     echo "🌐 Публичный URL можно посмотреть на: http://localhost:4040"
     exit 1
 fi
 
 # Запускаем ngrok
-ngrok http 3000 --log=stdout &
+ngrok http 3032 --log=stdout &
 NGROK_PID=$!
 
 echo "⏳ Ожидание запуска ngrok..."
