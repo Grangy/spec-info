@@ -1,0 +1,2526 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <title>Отчёт по продажам — Дашборд</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Tailwind CDN с fallback -->
+    <script src="https://cdn.tailwindcss.com" 
+            onerror="console.error('Tailwind CDN не загружен, используйте локальную версию')"></script>
+    <script>
+        // Проверка загрузки Tailwind
+        setTimeout(() => {
+            if (typeof tailwind === 'undefined') {
+                console.warn('Tailwind не загружен, попробуйте обновить страницу');
+            }
+        }, 1000);
+    </script>
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Проверка загрузки Chart.js
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js не загружен!');
+        }
+    </script>
+    
+    <!-- SheetJS CDN для экспорта в XLSX -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <script>
+        // Проверка загрузки SheetJS
+        if (typeof XLSX === 'undefined') {
+            console.error('SheetJS не загружен!');
+        }
+    </script>
+
+
+    <style>
+        .scrollbar-thin::-webkit-scrollbar {
+            height: 6px;
+            width: 6px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+            border-radius: 9999px;
+            background: #475569;
+        }
+        .scrollbar-thin::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .chart-container {
+            position: relative;
+            height: 100%;
+        }
+        /* Стили для date inputs */
+        input[type="date"] {
+            color-scheme: dark;
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+    <!-- Шапка -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-20">
+        <div class="w-full px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="h-9 w-9 rounded-2xl bg-emerald-500 flex items-center justify-center font-semibold text-slate-900">
+                    S
+                </div>
+                <div>
+                    <h1 class="text-xl font-semibold">Дашборд продаж</h1>
+                    <p class="text-xs text-slate-400">Анализ заказов • менеджеры • регионы • клиенты</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <button
+                    id="exportBtn"
+                    class="px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition border border-slate-700"
+                >
+                    📥 Экспорт
+                </button>
+            <div class="text-right">
+                <p class="text-xs text-slate-400">Дата формирования отчёта</p>
+                <p class="text-sm font-medium" id="reportDate"></p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="w-full px-4 py-6 space-y-6">
+        <!-- Индикатор загрузки -->
+        <div id="loadingIndicator" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div class="text-center">
+                <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-emerald-500 border-t-transparent mb-4"></div>
+                <p class="text-sm text-slate-400">Загрузка данных...</p>
+            </div>
+        </div>
+
+        <!-- Фильтры/контролы -->
+        <section class="flex flex-wrap items-center justify-between gap-3 fade-in">
+            <div class="flex flex-wrap gap-2">
+                <button
+                    data-period="all"
+                    class="period-btn px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-500 text-slate-900 hover:bg-emerald-400 transition"
+                >
+                    Все данные
+                </button>
+                <button
+                    data-period="recent"
+                    class="period-btn px-3 py-1.5 rounded-full text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition"
+                >
+                    Последние 1000
+                </button>
+                <button
+                    data-period="first"
+                    class="period-btn px-3 py-1.5 rounded-full text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition"
+                >
+                    Первые 1000
+                </button>
+            </div>
+            <div class="flex items-center gap-3 flex-wrap">
+                <div class="flex items-center gap-2">
+                    <label class="text-xs text-slate-400">Период:</label>
+                    <div class="flex items-center gap-2">
+                        <input
+                            type="date"
+                            id="startDate"
+                            class="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-100"
+                        />
+                        <span class="text-xs text-slate-500">—</span>
+                        <input
+                            type="date"
+                            id="endDate"
+                            class="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-100"
+                        />
+                        <button
+                            id="clearDateFilter"
+                            class="px-2 py-1.5 text-xs text-slate-400 hover:text-slate-200 transition"
+                            title="Очистить фильтр"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <label class="text-xs text-slate-400">Сравнить с:</label>
+                    <div class="flex items-center gap-2">
+                        <input
+                            type="date"
+                            id="compareStartDate"
+                            class="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-100"
+                        />
+                        <span class="text-xs text-slate-500">—</span>
+                        <input
+                            type="date"
+                            id="compareEndDate"
+                            class="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-100"
+                        />
+                        <button
+                            id="clearCompareFilter"
+                            class="px-2 py-1.5 text-xs text-slate-400 hover:text-slate-200 transition"
+                            title="Очистить сравнение"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2">
+                <label class="text-xs text-slate-400">Бизнес-регион:</label>
+                <select
+                        id="regionFilter"
+                    class="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                >
+                        <option value="all">Все регионы</option>
+                </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <label class="text-xs text-slate-400">Менеджер:</label>
+                    <select
+                        id="managerFilter"
+                    class="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                >
+                        <option value="all">Все менеджеры</option>
+                </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <label class="text-xs text-slate-400">Статус:</label>
+                    <select
+                        id="statusFilter"
+                    class="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                >
+                        <option value="all">Все статусы</option>
+                </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input
+                        type="text"
+                        id="searchInput"
+                        placeholder="Поиск по клиенту..."
+                        class="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 w-48"
+                    />
+                </div>
+            </div>
+        </section>
+
+        <!-- Верхний ряд KPI -->
+        <section class="grid gap-4 md:grid-cols-4 fade-in">
+            <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex flex-col gap-2">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs text-slate-400">Выручка, ₽</span>
+                    <span class="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400" id="revenueChange">
+                        –
+                    </span>
+                </div>
+                <p class="text-2xl font-semibold" id="kpiRevenue">–</p>
+                <p class="text-[11px] text-slate-500">Сумма за выбранный период</p>
+            </div>
+
+            <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex flex-col gap-2">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs text-slate-400">Заказы, шт</span>
+                    <span class="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-400" id="ordersChange">
+                        –
+                    </span>
+                </div>
+                <p class="text-2xl font-semibold" id="kpiOrders">–</p>
+                <p class="text-[11px] text-slate-500">Всего заказов</p>
+            </div>
+
+            <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex flex-col gap-2">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs text-slate-400">Средний чек, ₽</span>
+                    <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400" id="avgCheckChange">
+                        –
+                    </span>
+                </div>
+                <p class="text-2xl font-semibold" id="kpiAvgCheck">–</p>
+                <p class="text-[11px] text-slate-500">Средняя сумма заказа</p>
+            </div>
+
+            <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex flex-col gap-2">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs text-slate-400">Клиенты, шт</span>
+                    <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400" id="clientsInfo">
+                        –
+                    </span>
+                </div>
+                <p class="text-2xl font-semibold" id="kpiClients">–</p>
+                <p class="text-[11px] text-slate-500">Уникальные клиенты</p>
+            </div>
+        </section>
+
+        <!-- Графики: Менеджеры и регионы -->
+        <section class="grid gap-4 lg:grid-cols-3 fade-in">
+            <div class="lg:col-span-2 bg-slate-900/60 border border-slate-800 rounded-2xl p-4 md:p-5 flex flex-col gap-3">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-sm font-semibold">Выручка и заказы по менеджерам</h2>
+                        <p class="text-xs text-slate-400">
+                            ТОП-15 менеджеров по выручке
+                        </p>
+                    </div>
+                    <div class="flex gap-2 text-[10px]">
+                        <span class="inline-flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-emerald-400"></span> Выручка
+                        </span>
+                        <span class="inline-flex items-center gap-1">
+                            <span class="w-2 h-2 rounded-full bg-sky-400"></span> Заказы
+                        </span>
+                    </div>
+                </div>
+                <div class="h-96 chart-container">
+                    <canvas id="managersRevenueOrdersChart"></canvas>
+                </div>
+            </div>
+            <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 md:p-5 flex flex-col gap-3">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-sm font-semibold">Распределение по статусам</h2>
+                        <p class="text-xs text-slate-400">
+                            Доля заказов по состояниям
+                        </p>
+                    </div>
+                </div>
+                <div class="h-96 chart-container">
+                    <canvas id="statusChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Графики: Регионы и средний чек -->
+        <section class="grid gap-4 lg:grid-cols-3 fade-in">
+            <div class="lg:col-span-2 bg-slate-900/60 border border-slate-800 rounded-2xl p-4 md:p-5 flex flex-col gap-3">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-sm font-semibold">Выручка по регионам</h2>
+                        <p class="text-xs text-slate-400">
+                            ТОП-15 регионов по выручке
+                        </p>
+                    </div>
+                </div>
+                <div class="h-96 chart-container">
+                    <canvas id="regionsChart"></canvas>
+                </div>
+            </div>
+
+            <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 md:p-5 flex flex-col gap-3">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-sm font-semibold">Средний чек по менеджерам</h2>
+                        <p class="text-xs text-slate-400">
+                            ТОП-10 по среднему чеку
+                        </p>
+                    </div>
+                </div>
+                <div class="h-96 chart-container">
+                    <canvas id="avgCheckByManagerChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Отчет по мертвым клиентам -->
+        <section class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 md:p-5 fade-in">
+            <div class="mb-3">
+                <h2 class="text-sm font-semibold">Мертвые клиенты</h2>
+                <p class="text-xs text-slate-400">
+                    Клиенты без заказов за выбранный период
+                </p>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="bg-slate-900/80 rounded-xl p-4 border border-slate-700">
+                    <div class="text-xs text-slate-400 mb-1">Активные клиенты</div>
+                    <div class="text-2xl font-semibold text-emerald-400" id="activeClientsCount">–</div>
+                    <div class="text-[10px] text-slate-500 mt-1">с заказами</div>
+                </div>
+                <div class="bg-slate-900/80 rounded-xl p-4 border border-slate-700">
+                    <div class="text-xs text-slate-400 mb-1">Мертвые клиенты</div>
+                    <div class="text-2xl font-semibold text-red-400" id="deadClientsCount">–</div>
+                    <div class="text-[10px] text-slate-500 mt-1">без заказов</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Отчет за период -->
+        <section class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 md:p-5 fade-in">
+            <div class="flex items-center justify-between mb-3">
+                <div>
+                    <h2 class="text-sm font-semibold">Отчет за период</h2>
+                    <p class="text-xs text-slate-400" id="periodReportDescription">
+                        Выберите период и режим отображения
+                    </p>
+                </div>
+            </div>
+            
+            <!-- Выбор периода и режима -->
+            <div class="flex flex-wrap items-center gap-3 mb-4">
+                <div class="flex items-center gap-2">
+                    <label class="text-xs text-slate-400">Период отчета:</label>
+                    <input
+                        type="date"
+                        id="periodReportStartDate"
+                        class="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-100"
+                    />
+                    <span class="text-xs text-slate-500">—</span>
+                    <input
+                        type="date"
+                        id="periodReportEndDate"
+                        class="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-100"
+                    />
+                </div>
+                <div class="flex items-center gap-2">
+                    <label class="text-xs text-slate-400">Режим:</label>
+                    <div class="flex gap-1">
+                        <button
+                            data-period-mode="months"
+                            class="period-mode-btn px-3 py-1.5 rounded-full text-xs font-medium bg-emerald-500 text-slate-900 hover:bg-emerald-400 transition"
+                        >
+                            Месяцы
+                        </button>
+                        <button
+                            data-period-mode="weeks"
+                            class="period-mode-btn px-3 py-1.5 rounded-full text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition"
+                        >
+                            Недели
+                        </button>
+                        <button
+                            data-period-mode="days"
+                            class="period-mode-btn px-3 py-1.5 rounded-full text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition"
+                        >
+                            Дни
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Контейнер для отображения данных -->
+            <div id="periodReportContainer" class="grid gap-4">
+                <!-- Данные будут вставлены динамически -->
+            </div>
+        </section>
+
+        <!-- Клиенты по месяцам -->
+        <section class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 md:p-5 fade-in">
+            <div class="flex items-center justify-between mb-3">
+                <div>
+                    <h2 class="text-sm font-semibold">Клиенты по месяцам</h2>
+                    <p class="text-xs text-slate-400" id="clientsMonthlyDescription">
+                        Количество заказов, сумма и средний чек по месяцам
+                    </p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div class="flex items-center gap-1">
+                        <label class="text-xs text-slate-400">Режим:</label>
+                        <div class="flex gap-1">
+                            <button
+                                data-clients-mode="all"
+                                class="clients-mode-btn px-2 py-1 rounded-full text-xs font-medium bg-emerald-500 text-slate-900 hover:bg-emerald-400 transition"
+                                title="Все месяцы"
+                            >
+                                Все
+                            </button>
+                            <button
+                                data-clients-mode="last3"
+                                class="clients-mode-btn px-2 py-1 rounded-full text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition"
+                                title="Последние 3 месяца"
+                            >
+                                3 мес
+                            </button>
+                        </div>
+                    </div>
+                    <button
+                        id="exportClientsMonthlyBtn"
+                        class="px-3 py-1.5 text-xs font-medium bg-emerald-500 text-slate-900 hover:bg-emerald-400 transition rounded-lg flex items-center gap-1.5"
+                        title="Скачать отчет в XLSX"
+                    >
+                        <span>📥</span>
+                        <span>Экспорт</span>
+                    </button>
+                    <button
+                        id="toggleClientsMonthlyTable"
+                        class="px-2 py-1 text-xs text-slate-400 hover:text-slate-200 transition rounded-lg hover:bg-slate-800"
+                        title="Раскрыть/свернуть"
+                    >
+                        <span id="toggleClientsMonthlyIcon">▼</span>
+                    </button>
+                </div>
+            </div>
+            <div id="clientsMonthlyTableContainer" class="h-[600px] overflow-y-auto transition-all duration-300">
+                <table class="min-w-full text-xs border-collapse">
+                    <thead class="text-[11px] uppercase text-slate-400 sticky top-0 bg-slate-900 z-10">
+                        <tr>
+                            <th class="text-left px-3 py-2 border-r-4 border-slate-700">Клиент</th>
+                            <th class="text-right px-3 py-2 font-bold text-emerald-400 border-r-4 border-slate-700" colspan="3">Сентябрь</th>
+                            <th class="text-right px-3 py-2 font-bold text-sky-400 border-r-4 border-slate-700" colspan="3">Октябрь</th>
+                            <th class="text-right px-3 py-2 font-bold text-indigo-400 border-r-4 border-slate-700" colspan="3">Ноябрь</th>
+                            <th class="text-right px-3 py-2 font-bold text-amber-400" colspan="3">Итого</th>
+                        </tr>
+                        <tr>
+                            <th class="text-left px-3 py-1.5 border-r-4 border-slate-700 bg-slate-800/50"></th>
+                            <th class="text-right px-3 py-1.5 border-r border-slate-700 bg-slate-800/50">Заказов</th>
+                            <th class="text-right px-3 py-1.5 border-r border-slate-700 bg-slate-800/50">Сумма, ₽</th>
+                            <th class="text-right px-3 py-1.5 border-r-4 border-slate-700 bg-slate-800/50">Ср. чек, ₽</th>
+                            <th class="text-right px-3 py-1.5 border-r border-slate-700 bg-slate-800/50">Заказов</th>
+                            <th class="text-right px-3 py-1.5 border-r border-slate-700 bg-slate-800/50">Сумма, ₽</th>
+                            <th class="text-right px-3 py-1.5 border-r-4 border-slate-700 bg-slate-800/50">Ср. чек, ₽</th>
+                            <th class="text-right px-3 py-1.5 border-r border-slate-700 bg-slate-800/50">Заказов</th>
+                            <th class="text-right px-3 py-1.5 border-r border-slate-700 bg-slate-800/50">Сумма, ₽</th>
+                            <th class="text-right px-3 py-1.5 border-r-4 border-slate-700 bg-slate-800/50">Ср. чек, ₽</th>
+                            <th class="text-right px-3 py-1.5 border-r border-slate-700 bg-slate-800/50">Заказов</th>
+                            <th class="text-right px-3 py-1.5 border-r border-slate-700 bg-slate-800/50">Сумма, ₽</th>
+                            <th class="text-right px-3 py-1.5 bg-slate-800/50">Ср. чек, ₽</th>
+                        </tr>
+                    </thead>
+                    <tbody id="clientsMonthlyTableBody"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ТОП клиенты и таблица -->
+        <section class="grid gap-4 lg:grid-cols-3 fade-in">
+            <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 md:p-5 flex flex-col gap-3">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-sm font-semibold">Все клиенты</h2>
+                        <p class="text-xs text-slate-400">
+                            По сумме заказов
+                        </p>
+                    </div>
+                    <button
+                        id="toggleClientsTable"
+                        class="px-2 py-1 text-xs text-slate-400 hover:text-slate-200 transition rounded-lg hover:bg-slate-800"
+                        title="Раскрыть/свернуть"
+                    >
+                        <span id="toggleClientsIcon">▼</span>
+                    </button>
+                </div>
+                <div id="clientsTableContainer" class="h-[600px] overflow-y-auto transition-all duration-300">
+                    <table class="min-w-full text-xs border-separate border-spacing-y-1">
+                        <thead class="text-[11px] uppercase text-slate-400 sticky top-0 bg-slate-900 z-10">
+                            <tr>
+                                <th class="text-left px-3 py-1.5">Клиент</th>
+                                <th class="text-right px-3 py-1.5">Выручка, ₽</th>
+                                <th class="text-right px-3 py-1.5">Заказов</th>
+                                <th class="text-right px-3 py-1.5">Средний чек, ₽</th>
+                            </tr>
+                        </thead>
+                        <tbody id="clientsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="lg:col-span-2 bg-slate-900/60 border border-slate-800 rounded-2xl p-4 md:p-5 flex flex-col gap-3">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-sm font-semibold">Детальная статистика по менеджерам</h2>
+                        <p class="text-xs text-slate-400">
+                            Выручка, заказы, средний чек, клиенты
+                        </p>
+                    </div>
+                </div>
+                <div class="overflow-x-auto scrollbar-thin">
+                    <table class="min-w-full text-xs border-separate border-spacing-y-1">
+                        <thead class="text-[11px] uppercase text-slate-400">
+                            <tr>
+                                <th class="text-left px-3 py-1.5">Менеджер</th>
+                                <th class="text-right px-3 py-1.5">Выручка, ₽</th>
+                                <th class="text-right px-3 py-1.5">Заказы</th>
+                                <th class="text-right px-3 py-1.5">Средний чек, ₽</th>
+                                <th class="text-right px-3 py-1.5">Клиенты</th>
+                                <th class="text-right px-3 py-1.5">Доля, %</th>
+                            </tr>
+                        </thead>
+                        <tbody id="managersTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Статистика по месяцам -->
+        <section class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 md:p-5 fade-in">
+            <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <h2 class="text-sm font-semibold">Сводка по месяцам</h2>
+                        <p class="text-xs text-slate-400">
+                        Выручка, заказы, средний чек, клиенты по каждому месяцу
+                        </p>
+                    </div>
+                </div>
+                <div class="overflow-x-auto scrollbar-thin">
+                    <table class="min-w-full text-xs border-separate border-spacing-y-1">
+                        <thead class="text-[11px] uppercase text-slate-400">
+                            <tr>
+                                <th class="text-left px-3 py-1.5">Месяц</th>
+                                <th class="text-right px-3 py-1.5">Выручка, ₽</th>
+                                <th class="text-right px-3 py-1.5">Заказы</th>
+                                <th class="text-right px-3 py-1.5">Средний чек, ₽</th>
+                                <th class="text-right px-3 py-1.5">Клиенты</th>
+                            <th class="text-right px-3 py-1.5">Доля, %</th>
+                            </tr>
+                        </thead>
+                        <tbody id="monthlyTableBody"></tbody>
+                    </table>
+                </div>
+        </section>
+
+        <!-- Статистика по регионам -->
+        <section class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 md:p-5 fade-in">
+            <div class="flex items-center justify-between mb-3">
+                <div>
+                    <h2 class="text-sm font-semibold">Статистика по регионам</h2>
+                    <p class="text-xs text-slate-400">
+                        Детальная разбивка по бизнес-регионам
+                    </p>
+                </div>
+            </div>
+            <div class="overflow-x-auto scrollbar-thin">
+                <table class="min-w-full text-xs border-separate border-spacing-y-1">
+                    <thead class="text-[11px] uppercase text-slate-400">
+                        <tr>
+                            <th class="text-left px-3 py-1.5">Регион</th>
+                            <th class="text-right px-3 py-1.5">Выручка, ₽</th>
+                            <th class="text-right px-3 py-1.5">Заказы</th>
+                            <th class="text-right px-3 py-1.5">Средний чек, ₽</th>
+                            <th class="text-right px-3 py-1.5">Клиенты</th>
+                            <th class="text-right px-3 py-1.5">Менеджеров</th>
+                            <th class="text-right px-3 py-1.5">Доля, %</th>
+                        </tr>
+                    </thead>
+                    <tbody id="regionsTableBody"></tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        let allOrders = [];
+        let filteredOrders = [];
+        let allClients = []; // Все клиенты из clients_all.json
+        let charts = {};
+        let monthlyData = []; // Данные по месяцам
+        let clientsMonthlyData = []; // Данные клиентов по месяцам для экспорта
+
+        // Утилиты
+        const formatMoney = (value) =>
+            new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(value);
+
+        const parseAmount = (str) => {
+            if (!str) return 0;
+            return parseFloat(str.toString().replace(/,/g, '')) || 0;
+        };
+
+        const calculatePercentage = (part, total) => {
+            return total > 0 ? ((part / total) * 100).toFixed(1) : '0.0';
+        };
+
+        // Разделение данных на месяцы по реальным датам
+        function splitIntoMonths(orders, monthsCount = 12) {
+            // Фильтруем только записи с полными датами
+            const ordersWithDates = orders.map(order => {
+                const parsedDate = parseDate(order['Дата']);
+                return { order, parsedDate };
+            }).filter(item => item.parsedDate !== null);
+            
+            // Группируем по месяцам
+            const monthsMap = {};
+            
+            ordersWithDates.forEach(({ order, parsedDate }) => {
+                const monthKey = `${parsedDate.year}-${String(parsedDate.month).padStart(2, '0')}`;
+                if (!monthsMap[monthKey]) {
+                    monthsMap[monthKey] = [];
+                }
+                monthsMap[monthKey].push(order);
+            });
+            
+            // Преобразуем в массив и сортируем
+            const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 
+                              'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+            
+            const months = Object.entries(monthsMap)
+                .map(([key, orders]) => {
+                    const [year, month] = key.split('-');
+                    return {
+                        index: parseInt(month) - 1,
+                        name: `${monthNames[parseInt(month) - 1]} ${year}`,
+                        orders: orders,
+                        year: parseInt(year),
+                        month: parseInt(month)
+                    };
+                })
+                .sort((a, b) => {
+                    if (a.year !== b.year) return a.year - b.year;
+                    return a.month - b.month;
+                });
+            
+            // Если нужно ограничить количество, берем последние N месяцев
+            if (monthsCount && months.length > monthsCount) {
+                return months.slice(-monthsCount);
+            }
+            
+            return months;
+        }
+
+        // Парсинг даты из формата DD.MM.YYYY
+        function parseDate(dateStr) {
+            if (!dateStr || typeof dateStr !== 'string') return null;
+            // Проверяем, что это полная дата (содержит точки), а не только время
+            if (!dateStr.includes('.')) return null;
+            
+            const parts = dateStr.split('.');
+            if (parts.length !== 3) return null;
+            
+            const day = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10);
+            const year = parseInt(parts[2], 10);
+            
+            if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
+            
+            return { day, month, year, dateStr };
+        }
+
+        // Разделение данных на месяцы по реальным датам
+        function splitIntoMonths(orders, limit = null) {
+            // Фильтруем только записи с полными датами
+            const ordersWithDates = orders.map(order => {
+                const parsedDate = parseDate(order['Дата']);
+                return { order, parsedDate };
+            }).filter(item => item.parsedDate !== null);
+            
+            // Группируем по месяцам
+            const monthsMap = {};
+            
+            ordersWithDates.forEach(({ order, parsedDate }) => {
+                const monthKey = `${parsedDate.year}-${String(parsedDate.month).padStart(2, '0')}`;
+                if (!monthsMap[monthKey]) {
+                    monthsMap[monthKey] = [];
+                }
+                monthsMap[monthKey].push(order);
+            });
+            
+            // Преобразуем в массив и сортируем
+            const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 
+                              'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+            
+            const months = Object.entries(monthsMap)
+                .map(([key, orders]) => {
+                    const [year, month] = key.split('-');
+                    return {
+                        index: parseInt(month) - 1,
+                        name: `${monthNames[parseInt(month) - 1]} ${year}`,
+                        shortName: monthNames[parseInt(month) - 1],
+                        orders: orders,
+                        year: parseInt(year),
+                        month: parseInt(month),
+                        key: key
+                    };
+                })
+                .sort((a, b) => {
+                    if (a.year !== b.year) return a.year - b.year;
+                    return a.month - b.month;
+                });
+            
+            // Если указан лимит, берем последние N месяцев
+            if (limit && limit > 0) {
+                return months.slice(-limit);
+            }
+            
+            return months;
+        }
+        
+        // Разделение данных на последние 3 месяца (для обратной совместимости)
+        function splitInto3Months(orders) {
+            return splitIntoMonths(orders, 3);
+        }
+
+        // Загрузка данных
+        async function loadData() {
+            try {
+                // Загружаем заказы
+                const ordersResponse = await fetch('orders.json');
+                allOrders = await ordersResponse.json();
+                filteredOrders = [...allOrders];
+                
+                // Загружаем клиентов
+                try {
+                    const clientsResponse = await fetch('clients_all.json');
+                    allClients = await clientsResponse.json();
+                } catch (clientsError) {
+                    console.warn('Не удалось загрузить clients_all.json:', clientsError);
+                    allClients = [];
+                }
+                
+                // Разделяем данные на месяцы
+                monthlyData = splitIntoMonths(allOrders, 12);
+                processData();
+                
+                // Инициализация отчета за период
+                initPeriodReport();
+                
+                document.getElementById('loadingIndicator').style.display = 'none';
+            } catch (error) {
+                console.error('Ошибка загрузки данных:', error);
+                document.getElementById('loadingIndicator').innerHTML = 
+                    '<div class="text-center text-red-400"><p>Ошибка загрузки данных</p></div>';
+            }
+        }
+
+        // Обработка данных
+        function processData() {
+            // Заполнение фильтров
+            populateFilters();
+            
+            // Расчет метрик
+            calculateKPIs();
+            
+            // Построение графиков
+            buildCharts();
+            
+            // Заполнение таблиц
+            fillTables();
+            
+            // Инициализация обработчиков раскрытия/сворачивания
+            initToggleHandlers();
+        }
+
+        function initToggleHandlers() {
+            // Обработчик раскрытия/сворачивания блока клиентов
+            const toggleClientsBtn = document.getElementById('toggleClientsTable');
+            const clientsTableContainer = document.getElementById('clientsTableContainer');
+            const clientsTableParent = clientsTableContainer?.closest('.bg-slate-900\\/60');
+            const toggleClientsIcon = document.getElementById('toggleClientsIcon');
+            
+            if (toggleClientsBtn && clientsTableContainer && !toggleClientsBtn.dataset.initialized) {
+                toggleClientsBtn.dataset.initialized = 'true';
+                let clientsTableExpanded = false;
+                
+                toggleClientsBtn.addEventListener('click', function() {
+                    clientsTableExpanded = !clientsTableExpanded;
+                    
+                    if (clientsTableExpanded) {
+                        // Раскрываем - делаем блок на всю высоту экрана
+                        if (clientsTableParent) {
+                            clientsTableParent.style.position = 'fixed';
+                            clientsTableParent.style.top = '0';
+                            clientsTableParent.style.left = '0';
+                            clientsTableParent.style.right = '0';
+                            clientsTableParent.style.bottom = '0';
+                            clientsTableParent.style.zIndex = '1000';
+                            clientsTableParent.style.width = '100%';
+                            clientsTableParent.style.maxWidth = '100%';
+                            clientsTableParent.style.margin = '0';
+                            clientsTableParent.style.borderRadius = '0';
+                        }
+                        
+                        // Устанавливаем высоту контейнера на всю доступную высоту
+                        const viewportHeight = window.innerHeight;
+                        const headerHeight = document.querySelector('header')?.offsetHeight || 80;
+                        const padding = 100;
+                        const availableHeight = viewportHeight - headerHeight - padding;
+                        
+                        clientsTableContainer.style.height = availableHeight + 'px';
+                        clientsTableContainer.style.maxHeight = 'none';
+                        clientsTableContainer.style.overflowY = 'auto';
+                        
+                        toggleClientsIcon.textContent = '▲';
+                    } else {
+                        // Сворачиваем - возвращаем стандартные стили
+                        if (clientsTableParent) {
+                            clientsTableParent.style.position = '';
+                            clientsTableParent.style.top = '';
+                            clientsTableParent.style.left = '';
+                            clientsTableParent.style.right = '';
+                            clientsTableParent.style.bottom = '';
+                            clientsTableParent.style.zIndex = '';
+                            clientsTableParent.style.width = '';
+                            clientsTableParent.style.maxWidth = '';
+                            clientsTableParent.style.margin = '';
+                            clientsTableParent.style.borderRadius = '';
+                        }
+                        
+                        clientsTableContainer.style.height = '37.5rem'; // h-[600px]
+                        clientsTableContainer.style.maxHeight = '';
+                        clientsTableContainer.style.overflowY = 'auto';
+                        
+                        toggleClientsIcon.textContent = '▼';
+                    }
+                });
+            }
+
+            // Обработчик раскрытия/сворачивания блока клиентов по месяцам
+            const toggleClientsMonthlyBtn = document.getElementById('toggleClientsMonthlyTable');
+            const clientsMonthlyTableContainer = document.getElementById('clientsMonthlyTableContainer');
+            const clientsMonthlyTableParent = clientsMonthlyTableContainer?.closest('.bg-slate-900\\/60');
+            const toggleClientsMonthlyIcon = document.getElementById('toggleClientsMonthlyIcon');
+            
+            if (toggleClientsMonthlyBtn && clientsMonthlyTableContainer && !toggleClientsMonthlyBtn.dataset.initialized) {
+                toggleClientsMonthlyBtn.dataset.initialized = 'true';
+                let clientsMonthlyTableExpanded = false;
+                
+                toggleClientsMonthlyBtn.addEventListener('click', function() {
+                    clientsMonthlyTableExpanded = !clientsMonthlyTableExpanded;
+                    
+                    if (clientsMonthlyTableExpanded) {
+                        // Раскрываем - делаем блок на всю высоту экрана
+                        if (clientsMonthlyTableParent) {
+                            clientsMonthlyTableParent.style.position = 'fixed';
+                            clientsMonthlyTableParent.style.top = '0';
+                            clientsMonthlyTableParent.style.left = '0';
+                            clientsMonthlyTableParent.style.right = '0';
+                            clientsMonthlyTableParent.style.bottom = '0';
+                            clientsMonthlyTableParent.style.zIndex = '1000';
+                            clientsMonthlyTableParent.style.width = '100%';
+                            clientsMonthlyTableParent.style.maxWidth = '100%';
+                            clientsMonthlyTableParent.style.margin = '0';
+                            clientsMonthlyTableParent.style.borderRadius = '0';
+                        }
+                        
+                        // Устанавливаем высоту контейнера на всю доступную высоту
+                        const viewportHeight = window.innerHeight;
+                        const headerHeight = document.querySelector('header')?.offsetHeight || 80;
+                        const padding = 100;
+                        const availableHeight = viewportHeight - headerHeight - padding;
+                        
+                        clientsMonthlyTableContainer.style.height = availableHeight + 'px';
+                        clientsMonthlyTableContainer.style.maxHeight = 'none';
+                        clientsMonthlyTableContainer.style.overflowY = 'auto';
+                        
+                        toggleClientsMonthlyIcon.textContent = '▲';
+                    } else {
+                        // Сворачиваем - возвращаем стандартные стили
+                        if (clientsMonthlyTableParent) {
+                            clientsMonthlyTableParent.style.position = '';
+                            clientsMonthlyTableParent.style.top = '';
+                            clientsMonthlyTableParent.style.left = '';
+                            clientsMonthlyTableParent.style.right = '';
+                            clientsMonthlyTableParent.style.bottom = '';
+                            clientsMonthlyTableParent.style.zIndex = '';
+                            clientsMonthlyTableParent.style.width = '';
+                            clientsMonthlyTableParent.style.maxWidth = '';
+                            clientsMonthlyTableParent.style.margin = '';
+                            clientsMonthlyTableParent.style.borderRadius = '';
+                        }
+                        
+                        clientsMonthlyTableContainer.style.height = '37.5rem'; // h-[600px]
+                        clientsMonthlyTableContainer.style.maxHeight = '';
+                        clientsMonthlyTableContainer.style.overflowY = 'auto';
+                        
+                        toggleClientsMonthlyIcon.textContent = '▼';
+                    }
+                });
+            }
+        }
+
+        function populateFilters() {
+            const regions = [...new Set(allOrders.map(o => o['Бизнес регион']).filter(Boolean))].sort();
+            const managers = [...new Set(allOrders.map(o => o['Менеджер']).filter(Boolean))].sort();
+            const statuses = [...new Set(allOrders.map(o => o['Текущее состояние']).filter(Boolean))].sort();
+
+            const regionSelect = document.getElementById('regionFilter');
+            regions.forEach(region => {
+                const option = document.createElement('option');
+                option.value = region;
+                option.textContent = region;
+                regionSelect.appendChild(option);
+            });
+
+            const managerSelect = document.getElementById('managerFilter');
+            managers.forEach(manager => {
+                const option = document.createElement('option');
+                option.value = manager;
+                option.textContent = manager;
+                managerSelect.appendChild(option);
+            });
+
+            const statusSelect = document.getElementById('statusFilter');
+            statuses.forEach(status => {
+                const option = document.createElement('option');
+                option.value = status;
+                option.textContent = status;
+                statusSelect.appendChild(option);
+            });
+
+            // Инициализация календарей
+            initDatePickers();
+        }
+
+        function initDatePickers() {
+            // Проверяем существование элементов
+            const startDateEl = document.getElementById('startDate');
+            const endDateEl = document.getElementById('endDate');
+            const compareStartDateEl = document.getElementById('compareStartDate');
+            const compareEndDateEl = document.getElementById('compareEndDate');
+            const clearDateFilterEl = document.getElementById('clearDateFilter');
+            const clearCompareFilterEl = document.getElementById('clearCompareFilter');
+            
+            if (!startDateEl || !endDateEl || !compareStartDateEl || !compareEndDateEl) {
+                console.warn('Элементы календаря не найдены, пропускаем инициализацию');
+                return;
+            }
+            
+            // Устанавливаем диапазон дат на основе реальных дат из данных
+            const datesWithFullDates = allOrders
+                .map(o => parseDate(o['Дата']))
+                .filter(d => d !== null);
+            
+            if (datesWithFullDates.length > 0) {
+                const minDate = datesWithFullDates.reduce((min, d) => {
+                    const date = new Date(d.year, d.month - 1, d.day);
+                    return date < min ? date : min;
+                }, new Date(datesWithFullDates[0].year, datesWithFullDates[0].month - 1, datesWithFullDates[0].day));
+                
+                const maxDate = datesWithFullDates.reduce((max, d) => {
+                    const date = new Date(d.year, d.month - 1, d.day);
+                    return date > max ? date : max;
+                }, new Date(datesWithFullDates[0].year, datesWithFullDates[0].month - 1, datesWithFullDates[0].day));
+                
+                const minDateStr = minDate.toISOString().split('T')[0];
+                const maxDateStr = maxDate.toISOString().split('T')[0];
+                
+                startDateEl.setAttribute('min', minDateStr);
+                startDateEl.setAttribute('max', maxDateStr);
+                endDateEl.setAttribute('min', minDateStr);
+                endDateEl.setAttribute('max', maxDateStr);
+                
+                compareStartDateEl.setAttribute('min', minDateStr);
+                compareStartDateEl.setAttribute('max', maxDateStr);
+                compareEndDateEl.setAttribute('min', minDateStr);
+                compareEndDateEl.setAttribute('max', maxDateStr);
+            } else {
+                // Fallback если нет дат
+                const today = new Date();
+                const yearAgo = new Date(today);
+                yearAgo.setFullYear(today.getFullYear() - 1);
+                
+                const todayStr = today.toISOString().split('T')[0];
+                const yearAgoStr = yearAgo.toISOString().split('T')[0];
+                
+                startDateEl.setAttribute('min', yearAgoStr);
+                startDateEl.setAttribute('max', todayStr);
+                endDateEl.setAttribute('min', yearAgoStr);
+                endDateEl.setAttribute('max', todayStr);
+                
+                compareStartDateEl.setAttribute('min', yearAgoStr);
+                compareStartDateEl.setAttribute('max', todayStr);
+                compareEndDateEl.setAttribute('min', yearAgoStr);
+                compareEndDateEl.setAttribute('max', todayStr);
+            }
+            
+            
+            // Обработчики событий
+            startDateEl.addEventListener('change', validateAndApplyDateFilter);
+            endDateEl.addEventListener('change', validateAndApplyDateFilter);
+            compareStartDateEl.addEventListener('change', validateAndApplyCompareDate);
+            compareEndDateEl.addEventListener('change', validateAndApplyCompareDate);
+            
+            if (clearDateFilterEl) {
+                clearDateFilterEl.addEventListener('click', function() {
+                    startDateEl.value = '';
+                    endDateEl.value = '';
+                    applyFilters();
+                });
+            }
+            
+            if (clearCompareFilterEl) {
+                clearCompareFilterEl.addEventListener('click', function() {
+                    compareStartDateEl.value = '';
+                    compareEndDateEl.value = '';
+                    calculateKPIs();
+                });
+            }
+        }
+
+        function validateAndApplyDateFilter() {
+            const startDateEl = document.getElementById('startDate');
+            const endDateEl = document.getElementById('endDate');
+            
+            if (!startDateEl || !endDateEl) return;
+            
+            const startDate = startDateEl.value;
+            const endDate = endDateEl.value;
+            
+            // Валидация: конечная дата должна быть >= начальной
+            if (startDate && endDate && startDate > endDate) {
+                alert('Начальная дата не может быть больше конечной!');
+                endDateEl.value = startDate;
+                return;
+            }
+            
+            applyFilters();
+        }
+
+        function validateAndApplyCompareDate() {
+            const startDateEl = document.getElementById('compareStartDate');
+            const endDateEl = document.getElementById('compareEndDate');
+            
+            if (!startDateEl || !endDateEl) return;
+            
+            const startDate = startDateEl.value;
+            const endDate = endDateEl.value;
+            
+            // Валидация: конечная дата должна быть >= начальной
+            if (startDate && endDate && startDate > endDate) {
+                alert('Начальная дата не может быть больше конечной!');
+                endDateEl.value = startDate;
+                return;
+            }
+            
+            calculateKPIs();
+        }
+
+        function applyFilters() {
+            let filtered = [...allOrders];
+            
+            // Фильтр по календарю (используем реальные даты из БД)
+            const startDateEl = document.getElementById('startDate');
+            const endDateEl = document.getElementById('endDate');
+            const startDateStr = startDateEl ? startDateEl.value : '';
+            const endDateStr = endDateEl ? endDateEl.value : '';
+            
+            if (startDateStr && endDateStr) {
+                const startDate = new Date(startDateStr);
+                const endDate = new Date(endDateStr);
+                endDate.setHours(23, 59, 59, 999); // Включаем весь день
+                
+                // Проверка валидности дат
+                if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+                    console.error('Неверный формат даты');
+                } else if (startDate > endDate) {
+                    console.error('Начальная дата больше конечной');
+                } else {
+                    // Фильтруем по реальным датам из БД
+                    filtered = filtered.filter(order => {
+                        const parsedDate = parseDate(order['Дата']);
+                        if (!parsedDate) return false; // Пропускаем записи без полной даты
+                        
+                        // Создаем дату из парсинга
+                        const orderDate = new Date(parsedDate.year, parsedDate.month - 1, parsedDate.day);
+                        
+                        return orderDate >= startDate && orderDate <= endDate;
+                    });
+                    
+                    console.log('Date filter:', {
+                        startDate: startDate.toLocaleDateString('ru-RU'),
+                        endDate: endDate.toLocaleDateString('ru-RU'),
+                        recordsCount: filtered.length
+                    });
+                }
+            } else if (startDateStr || endDateStr) {
+                // Если выбрана только одна дата, используем её как начало и конец
+                const dateStr = startDateStr || endDateStr;
+                const date = new Date(dateStr);
+                const endOfDay = new Date(date);
+                endOfDay.setHours(23, 59, 59, 999);
+                
+                if (!isNaN(date.getTime())) {
+                    filtered = filtered.filter(order => {
+                        const parsedDate = parseDate(order['Дата']);
+                        if (!parsedDate) return false;
+                        
+                        const orderDate = new Date(parsedDate.year, parsedDate.month - 1, parsedDate.day);
+                        return orderDate >= date && orderDate <= endOfDay;
+                    });
+                }
+            }
+            
+            // Фильтр по региону
+            const region = document.getElementById('regionFilter').value;
+            if (region !== 'all') {
+                filtered = filtered.filter(o => o['Бизнес регион'] === region);
+            }
+            
+            // Фильтр по менеджеру
+            const manager = document.getElementById('managerFilter').value;
+            if (manager !== 'all') {
+                filtered = filtered.filter(o => o['Менеджер'] === manager);
+            }
+            
+            // Фильтр по статусу
+            const status = document.getElementById('statusFilter').value;
+            if (status !== 'all') {
+                filtered = filtered.filter(o => o['Текущее состояние'] === status);
+            }
+            
+            // Поиск по клиенту
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            if (search) {
+                filtered = filtered.filter(o => 
+                    o['Клиент'] && o['Клиент'].toLowerCase().includes(search)
+                );
+            }
+            
+            // Фильтр по периоду (только если календарь не выбран)
+            const hasDateRange = startDateStr && endDateStr;
+            if (!hasDateRange) {
+                const period = document.querySelector('.period-btn.bg-emerald-500')?.dataset.period || 'all';
+                if (period === 'recent') {
+                    filtered = filtered.slice(-1000);
+                } else if (period === 'first') {
+                    filtered = filtered.slice(0, 1000);
+                }
+            }
+            
+            filteredOrders = filtered;
+            processData();
+            // Обновляем отчет за период при изменении фильтров
+            if (typeof updatePeriodReport === 'function') {
+                updatePeriodReport();
+            }
+        }
+
+        function calculateKPIs() {
+            const totalRevenue = filteredOrders.reduce((sum, o) => sum + parseAmount(o['Сумма']), 0);
+            const totalOrders = filteredOrders.length;
+            const uniqueClients = new Set(filteredOrders.map(o => o['Клиент']).filter(Boolean)).size;
+            const avgCheck = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+            // Сравнение с выбранным периодом или предыдущим периодом
+            let revenueChange = 0, ordersChange = 0, avgCheckChange = 0;
+            
+            const compareStartDateEl = document.getElementById('compareStartDate');
+            const compareEndDateEl = document.getElementById('compareEndDate');
+            const compareStartDateStr = compareStartDateEl ? compareStartDateEl.value : '';
+            const compareEndDateStr = compareEndDateEl ? compareEndDateEl.value : '';
+            
+            if (compareStartDateStr && compareEndDateStr) {
+                // Вычисляем данные для периода сравнения по реальным датам
+                const startDate = new Date(compareStartDateStr);
+                const endDate = new Date(compareEndDateStr);
+                endDate.setHours(23, 59, 59, 999);
+                
+                if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime()) && startDate <= endDate) {
+                    // Фильтруем по реальным датам из БД
+                    const compareOrders = allOrders.filter(order => {
+                        const parsedDate = parseDate(order['Дата']);
+                        if (!parsedDate) return false;
+                        
+                        const orderDate = new Date(parsedDate.year, parsedDate.month - 1, parsedDate.day);
+                        return orderDate >= startDate && orderDate <= endDate;
+                    });
+                    
+                    const compareRevenue = compareOrders.reduce((sum, o) => sum + parseAmount(o['Сумма']), 0);
+                    const compareOrdersCount = compareOrders.length;
+                    const compareAvgCheck = compareOrdersCount > 0 ? compareRevenue / compareOrdersCount : 0;
+                    
+                    revenueChange = compareRevenue > 0 
+                        ? ((totalRevenue - compareRevenue) / compareRevenue * 100).toFixed(1)
+                        : 0;
+                    ordersChange = compareOrdersCount > 0
+                        ? ((totalOrders - compareOrdersCount) / compareOrdersCount * 100).toFixed(1)
+                        : 0;
+                    avgCheckChange = compareAvgCheck > 0
+                        ? ((avgCheck - compareAvgCheck) / compareAvgCheck * 100).toFixed(1)
+                        : 0;
+                }
+            } else {
+                // Сравнение с предыдущим периодом (первые 50% vs последние 50%)
+                const midPoint = Math.floor(allOrders.length / 2);
+                const firstHalf = allOrders.slice(0, midPoint);
+                const secondHalf = allOrders.slice(midPoint);
+                
+                const firstHalfRevenue = firstHalf.reduce((sum, o) => sum + parseAmount(o['Сумма']), 0);
+                const secondHalfRevenue = secondHalf.reduce((sum, o) => sum + parseAmount(o['Сумма']), 0);
+                revenueChange = firstHalfRevenue > 0 
+                    ? ((secondHalfRevenue - firstHalfRevenue) / firstHalfRevenue * 100).toFixed(1)
+                    : 0;
+
+                const firstHalfOrders = firstHalf.length;
+                const secondHalfOrders = secondHalf.length;
+                ordersChange = firstHalfOrders > 0
+                    ? ((secondHalfOrders - firstHalfOrders) / firstHalfOrders * 100).toFixed(1)
+                    : 0;
+
+                const firstHalfAvgCheck = firstHalfOrders > 0 ? firstHalfRevenue / firstHalfOrders : 0;
+                const secondHalfAvgCheck = secondHalfOrders > 0 ? secondHalfRevenue / secondHalfOrders : 0;
+                avgCheckChange = firstHalfAvgCheck > 0
+                    ? ((secondHalfAvgCheck - firstHalfAvgCheck) / firstHalfAvgCheck * 100).toFixed(1)
+                    : 0;
+            }
+
+            // Повторные клиенты
+            const clientOrders = {};
+            filteredOrders.forEach(o => {
+                const client = o['Клиент'];
+                if (client) {
+                    clientOrders[client] = (clientOrders[client] || 0) + 1;
+                }
+            });
+            const repeatClients = Object.values(clientOrders).filter(count => count > 1).length;
+            const repeatPercentage = uniqueClients > 0 ? ((repeatClients / uniqueClients) * 100).toFixed(0) : 0;
+
+            // Обновление UI
+            document.getElementById('kpiRevenue').textContent = formatMoney(totalRevenue);
+            document.getElementById('kpiOrders').textContent = formatMoney(totalOrders);
+            document.getElementById('kpiClients').textContent = formatMoney(uniqueClients);
+            document.getElementById('kpiAvgCheck').textContent = formatMoney(avgCheck);
+
+            document.getElementById('revenueChange').textContent = 
+                `${revenueChange >= 0 ? '+' : ''}${revenueChange}% к пред. периоду`;
+            document.getElementById('ordersChange').textContent = 
+                `${ordersChange >= 0 ? '+' : ''}${ordersChange}% к пред. периоду`;
+            document.getElementById('avgCheckChange').textContent = 
+                `${avgCheckChange >= 0 ? '+' : ''}${avgCheckChange}% к пред. периоду`;
+            document.getElementById('clientsInfo').textContent = `${repeatPercentage}% повторных`;
+
+            document.getElementById('reportDate').textContent = new Date().toLocaleString("ru-RU");
+        }
+
+        function buildCharts() {
+            // Проверяем, что Chart.js загружен
+            if (typeof Chart === 'undefined') {
+                console.error('Chart.js не загружен, графики не будут отображаться');
+                // Пытаемся перезагрузить Chart.js
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+                script.onload = () => {
+                    console.log('Chart.js перезагружен, обновляем графики...');
+                    buildCharts();
+                };
+                document.head.appendChild(script);
+                return;
+            }
+            
+            // Данные по менеджерам
+            const managerStats = {};
+            filteredOrders.forEach(order => {
+                const manager = order['Менеджер'] || 'Не указан';
+                if (!managerStats[manager]) {
+                    managerStats[manager] = { revenue: 0, orders: 0 };
+                }
+                managerStats[manager].revenue += parseAmount(order['Сумма']);
+                managerStats[manager].orders += 1;
+            });
+
+            const topManagers = Object.entries(managerStats)
+                .sort((a, b) => b[1].revenue - a[1].revenue)
+                .slice(0, 15);
+
+            // График: Выручка и заказы по менеджерам
+            const ctx1 = document.getElementById('managersRevenueOrdersChart').getContext('2d');
+            if (charts.managersRevenueOrders) charts.managersRevenueOrders.destroy();
+            charts.managersRevenueOrders = new Chart(ctx1, {
+                type: 'bar',
+            data: {
+                    labels: topManagers.map(m => m[0]),
+                datasets: [
+                    {
+                            type: 'bar',
+                            label: 'Выручка, ₽',
+                            data: topManagers.map(m => m[1].revenue),
+                            backgroundColor: 'rgba(16, 185, 129, 0.6)',
+                            borderColor: 'rgb(16, 185, 129)',
+                        borderWidth: 1,
+                            yAxisID: 'y',
+                        },
+                        {
+                            type: 'line',
+                            label: 'Заказы, шт',
+                            data: topManagers.map(m => m[1].orders),
+                            borderColor: 'rgb(56, 189, 248)',
+                            backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.25,
+                            yAxisID: 'y1',
+                        }
+                    ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: {
+                            labels: { color: '#e5e7eb', font: { size: 11 } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    if (context.datasetIndex === 0) {
+                                        return ' ' + formatMoney(context.parsed.y) + ' ₽';
+                                    }
+                                    return ' ' + context.parsed.y + ' шт';
+                                }
+                            }
+                        }
+                },
+                scales: {
+                    x: {
+                            ticks: { color: '#9ca3af', font: { size: 10 }, maxRotation: 45, minRotation: 45 },
+                            grid: { display: false }
+                    },
+                    y: {
+                            type: 'linear',
+                            position: 'left',
+                            ticks: { color: '#9ca3af', font: { size: 11 } },
+                            grid: { color: '#1f2937' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            position: 'right',
+                            ticks: { color: '#9ca3af', font: { size: 11 } },
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+
+            // График: Статусы
+            const statusStats = {};
+            filteredOrders.forEach(order => {
+                const status = order['Текущее состояние'] || 'Не указан';
+                statusStats[status] = (statusStats[status] || 0) + 1;
+            });
+
+            const ctx2 = document.getElementById('statusChart').getContext('2d');
+            if (charts.status) charts.status.destroy();
+            charts.status = new Chart(ctx2, {
+                type: 'doughnut',
+            data: {
+                    labels: Object.keys(statusStats),
+                    datasets: [{
+                        data: Object.values(statusStats),
+                        backgroundColor: [
+                            'rgba(16, 185, 129, 0.8)',
+                            'rgba(56, 189, 248, 0.8)',
+                            'rgba(139, 92, 246, 0.8)',
+                            'rgba(251, 191, 36, 0.8)',
+                            'rgba(239, 68, 68, 0.8)',
+                            'rgba(168, 85, 247, 0.8)',
+                        ]
+                    }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                            position: 'bottom',
+                            labels: { color: '#e5e7eb', font: { size: 10 } }
+                        }
+                    }
+                }
+            });
+
+            // График: Регионы
+            const regionStats = {};
+            filteredOrders.forEach(order => {
+                const region = order['Бизнес регион'] || 'Не указан';
+                if (!regionStats[region]) {
+                    regionStats[region] = { revenue: 0, orders: 0 };
+                }
+                regionStats[region].revenue += parseAmount(order['Сумма']);
+                regionStats[region].orders += 1;
+            });
+
+            const topRegions = Object.entries(regionStats)
+                .sort((a, b) => b[1].revenue - a[1].revenue)
+                .slice(0, 15);
+
+            const ctx3 = document.getElementById('regionsChart').getContext('2d');
+            if (charts.regions) charts.regions.destroy();
+            charts.regions = new Chart(ctx3, {
+                type: 'bar',
+                data: {
+                    labels: topRegions.map(r => r[0]),
+                    datasets: [{
+                        label: 'Выручка, ₽',
+                        data: topRegions.map(r => r[1].revenue),
+                        backgroundColor: 'rgba(139, 92, 246, 0.6)',
+                        borderColor: 'rgb(139, 92, 246)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                                label: (ctx) => ' ' + formatMoney(ctx.parsed.x) + ' ₽'
+                            }
+                        }
+                },
+                scales: {
+                    x: {
+                            ticks: { color: '#9ca3af', font: { size: 11 } },
+                            grid: { color: '#1f2937' }
+                    },
+                    y: {
+                            ticks: { color: '#9ca3af', font: { size: 11 } },
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+
+            // График: Средний чек по менеджерам
+            const managerAvgCheck = topManagers.map(m => ({
+                name: m[0],
+                avgCheck: m[1].orders > 0 ? m[1].revenue / m[1].orders : 0
+            })).sort((a, b) => b.avgCheck - a.avgCheck).slice(0, 10);
+
+            const ctx4 = document.getElementById('avgCheckByManagerChart').getContext('2d');
+            if (charts.avgCheckByManager) charts.avgCheckByManager.destroy();
+            charts.avgCheckByManager = new Chart(ctx4, {
+                type: 'bar',
+            data: {
+                    labels: managerAvgCheck.map(m => m.name),
+                    datasets: [{
+                        label: 'Средний чек, ₽',
+                        data: managerAvgCheck.map(m => m.avgCheck),
+                        backgroundColor: 'rgba(251, 191, 36, 0.6)',
+                        borderColor: 'rgb(251, 191, 36)',
+                        borderWidth: 1
+                    }]
+            },
+            options: {
+                    indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => ' ' + formatMoney(ctx.parsed.x) + ' ₽'
+                            }
+                        }
+                },
+                scales: {
+                    x: {
+                            ticks: { color: '#9ca3af', font: { size: 11 } },
+                            grid: { color: '#1f2937' }
+                    },
+                    y: {
+                            ticks: { color: '#9ca3af', font: { size: 10 } },
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+
+        }
+
+        // Разделение данных по неделям
+        function splitIntoWeeks(orders, startDate, endDate) {
+            const ordersWithDates = orders.map(order => {
+                const parsedDate = parseDate(order['Дата']);
+                return { order, parsedDate };
+            }).filter(item => item.parsedDate !== null);
+            
+            const weeks = [];
+            const currentDate = new Date(startDate);
+            const end = new Date(endDate);
+            
+            while (currentDate <= end) {
+                const weekStart = new Date(currentDate);
+                const weekEnd = new Date(currentDate);
+                weekEnd.setDate(weekEnd.getDate() + 6);
+                
+                if (weekEnd > end) {
+                    weekEnd.setTime(end.getTime());
+                }
+                
+                const weekOrders = ordersWithDates
+                    .filter(({ parsedDate }) => {
+                        const orderDate = new Date(parsedDate.year, parsedDate.month - 1, parsedDate.day);
+                        return orderDate >= weekStart && orderDate <= weekEnd;
+                    })
+                    .map(({ order }) => order);
+                
+                const weekName = `${weekStart.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })} - ${weekEnd.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}`;
+                
+                weeks.push({
+                    name: weekName,
+                    start: new Date(weekStart),
+                    end: new Date(weekEnd),
+                    orders: weekOrders
+                });
+                
+                currentDate.setDate(currentDate.getDate() + 7);
+            }
+            
+            return weeks;
+        }
+
+        // Разделение данных по дням
+        function splitIntoDays(orders, startDate, endDate) {
+            const ordersWithDates = orders.map(order => {
+                const parsedDate = parseDate(order['Дата']);
+                return { order, parsedDate };
+            }).filter(item => item.parsedDate !== null);
+            
+            const days = [];
+            const currentDate = new Date(startDate);
+            const end = new Date(endDate);
+            
+            while (currentDate <= end) {
+                const dayOrders = ordersWithDates
+                    .filter(({ parsedDate }) => {
+                        const orderDate = new Date(parsedDate.year, parsedDate.month - 1, parsedDate.day);
+                        return orderDate.toDateString() === currentDate.toDateString();
+                    })
+                    .map(({ order }) => order);
+                
+                const dayName = currentDate.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                
+                days.push({
+                    name: dayName,
+                    date: new Date(currentDate),
+                    orders: dayOrders
+                });
+                
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+            
+            return days;
+        }
+
+        // Разделение данных по месяцам для выбранного периода (показывает все месяцы в периоде)
+        function splitIntoMonthsForPeriod(orders, startDate, endDate) {
+            const ordersWithDates = orders.map(order => {
+                const parsedDate = parseDate(order['Дата']);
+                return { order, parsedDate };
+            }).filter(item => item.parsedDate !== null);
+            
+            const monthsMap = {};
+            const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 
+                              'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+            
+            // Собираем заказы по месяцам
+            ordersWithDates.forEach(({ order, parsedDate }) => {
+                const orderDate = new Date(parsedDate.year, parsedDate.month - 1, parsedDate.day);
+                if (orderDate >= startDate && orderDate <= endDate) {
+                    const monthKey = `${parsedDate.year}-${String(parsedDate.month).padStart(2, '0')}`;
+                    if (!monthsMap[monthKey]) {
+                        monthsMap[monthKey] = [];
+                    }
+                    monthsMap[monthKey].push(order);
+                }
+            });
+            
+            // Создаем все месяцы в периоде, даже если в них нет данных
+            const allMonths = [];
+            const current = new Date(startDate);
+            const end = new Date(endDate);
+            
+            while (current <= end) {
+                const year = current.getFullYear();
+                const month = current.getMonth() + 1;
+                const monthKey = `${year}-${String(month).padStart(2, '0')}`;
+                
+                allMonths.push({
+                    name: `${monthNames[month - 1]} ${year}`,
+                    shortName: monthNames[month - 1],
+                    orders: monthsMap[monthKey] || [],
+                    year: year,
+                    month: month,
+                    key: monthKey
+                });
+                
+                // Переходим к следующему месяцу
+                current.setMonth(current.getMonth() + 1);
+                current.setDate(1);
+            }
+            
+            return allMonths;
+        }
+
+        // Обновление отчета за период
+        function updatePeriodReport() {
+            const startDateEl = document.getElementById('periodReportStartDate');
+            const endDateEl = document.getElementById('periodReportEndDate');
+            const modeBtn = document.querySelector('.period-mode-btn.bg-emerald-500');
+            const mode = modeBtn ? modeBtn.dataset.periodMode : 'months';
+            
+            if (!startDateEl || !endDateEl) return;
+            
+            const startDateStr = startDateEl.value;
+            const endDateStr = endDateEl.value;
+            
+            // Если период не выбран, используем данные по умолчанию (Сентябрь, Октябрь, Ноябрь)
+            let startDate, endDate;
+            if (startDateStr && endDateStr) {
+                startDate = new Date(startDateStr);
+                endDate = new Date(endDateStr);
+                endDate.setHours(23, 59, 59, 999);
+            } else {
+                // По умолчанию - последние 3 месяца из данных
+                const currentYear = new Date().getFullYear();
+                startDate = new Date(currentYear, 8, 1); // Сентябрь
+                endDate = new Date(currentYear, 10, 30); // Ноябрь
+                endDate.setHours(23, 59, 59, 999);
+            }
+            
+            // Получаем отфильтрованные заказы для периода
+            const periodOrders = filteredOrders.filter(order => {
+                const parsedDate = parseDate(order['Дата']);
+                if (!parsedDate) return false;
+                const orderDate = new Date(parsedDate.year, parsedDate.month - 1, parsedDate.day);
+                return orderDate >= startDate && orderDate <= endDate;
+            });
+            
+            let periodData = [];
+            let description = '';
+            
+            if (mode === 'months') {
+                periodData = splitIntoMonthsForPeriod(periodOrders, startDate, endDate);
+                description = `Статистика по месяцам за период ${startDate.toLocaleDateString('ru-RU')} - ${endDate.toLocaleDateString('ru-RU')}`;
+            } else if (mode === 'weeks') {
+                periodData = splitIntoWeeks(periodOrders, startDate, endDate);
+                description = `Статистика по неделям за период ${startDate.toLocaleDateString('ru-RU')} - ${endDate.toLocaleDateString('ru-RU')}`;
+            } else if (mode === 'days') {
+                periodData = splitIntoDays(periodOrders, startDate, endDate);
+                description = `Статистика по дням за период ${startDate.toLocaleDateString('ru-RU')} - ${endDate.toLocaleDateString('ru-RU')}`;
+            }
+            
+            // Обновляем описание
+            document.getElementById('periodReportDescription').textContent = description;
+            
+            // Отображаем данные
+            const container = document.getElementById('periodReportContainer');
+            container.innerHTML = '';
+            
+            if (periodData.length === 0) {
+                container.innerHTML = '<div class="text-center text-slate-400 py-8">Нет данных за выбранный период</div>';
+                return;
+            }
+            
+            // Определяем количество колонок в зависимости от режима
+            let colsClass;
+            if (mode === 'days') {
+                // Для дней используем адаптивную сетку с прокруткой, если дней много
+                if (periodData.length > 14) {
+                    colsClass = 'grid-cols-7';
+                    container.className = `grid gap-4 ${colsClass} overflow-x-auto max-h-[600px]`;
+                } else {
+                    colsClass = 'grid-cols-7';
+                    container.className = `grid gap-4 ${colsClass}`;
+                }
+            } else if (mode === 'weeks') {
+                // Для недель - адаптивная сетка
+                const weeksCount = periodData.length;
+                if (weeksCount <= 4) {
+                    colsClass = 'grid-cols-4';
+                } else if (weeksCount <= 6) {
+                    colsClass = 'grid-cols-6';
+                } else {
+                    colsClass = 'grid-cols-8';
+                }
+                container.className = `grid gap-4 ${colsClass} overflow-x-auto`;
+            } else {
+                // Для месяцев - адаптивная сетка
+                const monthsCount = periodData.length;
+                if (monthsCount <= 3) {
+                    colsClass = 'grid-cols-3';
+                } else if (monthsCount <= 6) {
+                    colsClass = 'grid-cols-6';
+                } else if (monthsCount <= 12) {
+                    colsClass = 'grid-cols-6';
+                } else {
+                    colsClass = 'grid-cols-8';
+                }
+                container.className = `grid gap-4 ${colsClass} overflow-x-auto`;
+            }
+            
+            // Цвета для разных периодов
+            const colors = [
+                'text-emerald-400',
+                'text-sky-400',
+                'text-indigo-400',
+                'text-amber-400',
+                'text-purple-400',
+                'text-pink-400',
+                'text-cyan-400'
+            ];
+            
+            periodData.forEach((period, index) => {
+                const revenue = period.orders.reduce((sum, o) => sum + parseAmount(o['Сумма']), 0);
+                const ordersCount = period.orders.length;
+                const avgCheck = ordersCount > 0 ? revenue / ordersCount : 0;
+                
+                // Рассчитываем количество уникальных клиентов
+                const uniqueClients = new Set(
+                    period.orders
+                        .map(o => o['Клиент'])
+                        .filter(Boolean)
+                ).size;
+                
+                const colorClass = colors[index % colors.length];
+                
+                const div = document.createElement('div');
+                div.className = 'bg-slate-900/80 rounded-xl p-4 border border-slate-700';
+                div.innerHTML = `
+                    <div class="text-xs text-slate-400 mb-1">${period.name}</div>
+                    <div class="text-2xl font-semibold ${colorClass}" id="period-${index}-orders">${formatMoney(ordersCount)}</div>
+                    <div class="text-[10px] text-slate-500 mt-1">заказов</div>
+                    <div class="text-xs text-slate-400 mt-2">Сумма: ${formatMoney(revenue)} ₽</div>
+                    <div class="text-xs text-slate-400">Ср. чек: ${formatMoney(avgCheck)} ₽</div>
+                    <div class="text-xs text-slate-400 mt-1">Клиенты: ${formatMoney(uniqueClients)}</div>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        function fillClientsTable() {
+            const clientStats = {};
+            filteredOrders.forEach(order => {
+                const client = order['Клиент'] || 'Не указан';
+                if (!clientStats[client]) {
+                    clientStats[client] = { revenue: 0, orders: 0 };
+                }
+                clientStats[client].revenue += parseAmount(order['Сумма']);
+                clientStats[client].orders += 1;
+            });
+
+            const clientsArray = Object.entries(clientStats)
+                .map(([name, stats]) => ({
+                    name,
+                    revenue: stats.revenue,
+                    orders: stats.orders,
+                    avgCheck: stats.orders > 0 ? stats.revenue / stats.orders : 0
+                }))
+                .sort((a, b) => b.revenue - a.revenue);
+
+            const clientsTableBody = document.getElementById('clientsTableBody');
+            clientsTableBody.innerHTML = '';
+            clientsArray.forEach(client => {
+                const tr = document.createElement('tr');
+                tr.className = 'bg-slate-900 hover:bg-slate-800/80 transition text-xs';
+                tr.innerHTML = `
+                    <td class="px-3 py-2 rounded-l-xl">${client.name}</td>
+                    <td class="px-3 py-2 text-right">${formatMoney(client.revenue)}</td>
+                    <td class="px-3 py-2 text-right">${formatMoney(client.orders)}</td>
+                    <td class="px-3 py-2 text-right rounded-r-xl">${formatMoney(client.avgCheck)}</td>
+                `;
+                clientsTableBody.appendChild(tr);
+            });
+        }
+
+        function fillClientsMonthlyTable() {
+            // Определяем режим отображения
+            const modeBtn = document.querySelector('.clients-mode-btn.bg-emerald-500');
+            const mode = modeBtn ? modeBtn.dataset.clientsMode : 'all';
+            
+            // Получаем данные по месяцам из отфильтрованных заказов
+            const monthsData = mode === 'last3' 
+                ? splitIntoMonths(filteredOrders, 3)
+                : splitIntoMonths(filteredOrders);
+            
+            if (monthsData.length === 0) {
+                const colCount = monthsData.length * 3 + 4; // месяцы * 3 + клиент + итого * 3
+                document.getElementById('clientsMonthlyTableBody').innerHTML = `<tr><td colspan="${colCount}" class="text-center py-4 text-slate-400">Нет данных</td></tr>`;
+                return;
+            }
+            
+            // Обновляем заголовки таблицы динамически
+            updateClientsMonthlyTableHeaders(monthsData);
+            
+            // Собираем статистику по клиентам для каждого месяца
+            const clientsMonthlyStats = {};
+            
+            monthsData.forEach((month, monthIndex) => {
+                const monthKey = `month${monthIndex}`;
+                month.orders.forEach(order => {
+                    const client = order['Клиент'] || 'Не указан';
+                    if (!clientsMonthlyStats[client]) {
+                        clientsMonthlyStats[client] = {};
+                        monthsData.forEach((_, idx) => {
+                            clientsMonthlyStats[client][`month${idx}`] = { orders: 0, revenue: 0 };
+                        });
+                        clientsMonthlyStats[client].total = { orders: 0, revenue: 0 };
+                    }
+                    
+                    clientsMonthlyStats[client][monthKey].orders += 1;
+                    clientsMonthlyStats[client][monthKey].revenue += parseAmount(order['Сумма']);
+                });
+            });
+            
+            // Преобразуем в массив и сортируем по общей сумме
+            const clientsArray = Object.entries(clientsMonthlyStats)
+                .map(([name, stats]) => {
+                    // Рассчитываем итоги
+                    let totalOrders = 0;
+                    let totalRevenue = 0;
+                    const monthStats = {};
+                    
+                    monthsData.forEach((_, monthIndex) => {
+                        const monthKey = `month${monthIndex}`;
+                        const monthData = stats[monthKey];
+                        monthStats[monthKey] = {
+                            orders: monthData.orders,
+                            revenue: monthData.revenue,
+                            avgCheck: monthData.orders > 0 ? monthData.revenue / monthData.orders : 0
+                        };
+                        totalOrders += monthData.orders;
+                        totalRevenue += monthData.revenue;
+                    });
+                    
+                    return {
+                        name,
+                        months: monthStats,
+                        total: {
+                            orders: totalOrders,
+                            revenue: totalRevenue,
+                            avgCheck: totalOrders > 0 ? totalRevenue / totalOrders : 0
+                        }
+                    };
+                })
+                .sort((a, b) => b.total.revenue - a.total.revenue);
+            
+            // Сохраняем данные для экспорта
+            clientsMonthlyData = clientsArray.map(client => {
+                const result = {
+                    name: client.name,
+                    total: client.total
+                };
+                monthsData.forEach((month, idx) => {
+                    const monthKey = `month${idx}`;
+                    const monthData = client.months[monthKey];
+                    result[monthKey] = monthData;
+                    result[`month${idx}_name`] = month.name; // Сохраняем название месяца
+                });
+                return result;
+            });
+            
+            // Сохраняем информацию о месяцах для экспорта
+            clientsMonthlyData.monthsInfo = monthsData;
+            
+            // Отображаем данные в таблице
+            const clientsMonthlyTableBody = document.getElementById('clientsMonthlyTableBody');
+            clientsMonthlyTableBody.innerHTML = '';
+            clientsArray.forEach(client => {
+                const tr = document.createElement('tr');
+                tr.className = 'bg-slate-900 hover:bg-slate-800/80 transition text-xs border-b border-slate-800';
+                
+                let cellsHTML = `<td class="px-3 py-2 border-r-4 border-slate-700 font-medium">${client.name}</td>`;
+                
+                monthsData.forEach((_, monthIndex) => {
+                    const monthKey = `month${monthIndex}`;
+                    const monthData = client.months[monthKey];
+                    cellsHTML += `
+                        <td class="px-3 py-2 text-right border-r border-slate-700/50">${formatMoney(monthData.orders)}</td>
+                        <td class="px-3 py-2 text-right border-r border-slate-700/50">${formatMoney(monthData.revenue)}</td>
+                        <td class="px-3 py-2 text-right border-r-4 border-slate-700">${formatMoney(monthData.avgCheck)}</td>
+                    `;
+                });
+                
+                cellsHTML += `
+                    <td class="px-3 py-2 text-right border-r border-slate-700/50 font-bold text-amber-400">${formatMoney(client.total.orders)}</td>
+                    <td class="px-3 py-2 text-right border-r border-slate-700/50 font-bold text-amber-400">${formatMoney(client.total.revenue)}</td>
+                    <td class="px-3 py-2 text-right font-bold text-amber-400">${formatMoney(client.total.avgCheck)}</td>
+                `;
+                
+                tr.innerHTML = cellsHTML;
+                clientsMonthlyTableBody.appendChild(tr);
+            });
+        }
+        
+        // Обновление заголовков таблицы "Клиенты по месяцам"
+        function updateClientsMonthlyTableHeaders(monthsData) {
+            const colors = ['text-emerald-400', 'text-sky-400', 'text-indigo-400'];
+            const thead = document.querySelector('#clientsMonthlyTableContainer thead');
+            if (!thead) return;
+            
+            // Обновляем первую строку заголовков
+            let firstRowHTML = '<tr><th class="text-left px-3 py-2 border-r-4 border-slate-700">Клиент</th>';
+            monthsData.forEach((month, index) => {
+                firstRowHTML += `<th class="text-right px-3 py-2 font-bold ${colors[index % colors.length]} border-r-4 border-slate-700" colspan="3">${month.name}</th>`;
+            });
+            firstRowHTML += '<th class="text-right px-3 py-2 font-bold text-amber-400" colspan="3">Итого</th></tr>';
+            
+            // Вторая строка заголовков
+            let secondRowHTML = '<tr><th class="text-left px-3 py-1.5 border-r-4 border-slate-700 bg-slate-800/50"></th>';
+            monthsData.forEach(() => {
+                secondRowHTML += `
+                    <th class="text-right px-3 py-1.5 border-r border-slate-700 bg-slate-800/50">Заказов</th>
+                    <th class="text-right px-3 py-1.5 border-r border-slate-700 bg-slate-800/50">Сумма, ₽</th>
+                    <th class="text-right px-3 py-1.5 border-r-4 border-slate-700 bg-slate-800/50">Ср. чек, ₽</th>
+                `;
+            });
+            secondRowHTML += `
+                <th class="text-right px-3 py-1.5 border-r border-slate-700 bg-slate-800/50">Заказов</th>
+                <th class="text-right px-3 py-1.5 border-r border-slate-700 bg-slate-800/50">Сумма, ₽</th>
+                <th class="text-right px-3 py-1.5 bg-slate-800/50">Ср. чек, ₽</th>
+            </tr>`;
+            
+            thead.innerHTML = firstRowHTML + secondRowHTML;
+            
+            // Обновляем описание
+            const monthNames = monthsData.map(m => m.shortName).join(', ');
+            const descriptionEl = document.getElementById('clientsMonthlyDescription');
+            if (descriptionEl) {
+                descriptionEl.textContent = `Количество заказов, сумма и средний чек по месяцам (${monthNames})`;
+            }
+        }
+
+        function fillDeadClientsTable() {
+            if (!allClients || allClients.length === 0) {
+                document.getElementById('activeClientsCount').textContent = '–';
+                document.getElementById('deadClientsCount').textContent = '–';
+                return;
+            }
+
+            // Получаем список активных клиентов из отфильтрованных заказов
+            // Используем точное совпадение (убираем только пробелы в начале и конце)
+            const activeClients = new Set();
+            filteredOrders.forEach(order => {
+                const clientName = order['Клиент'];
+                if (clientName) {
+                    // Убираем пробелы только в начале и конце, без нормализации
+                    const trimmedName = clientName.trim();
+                    if (trimmedName) {
+                        activeClients.add(trimmedName);
+                    }
+                }
+            });
+
+            // Фильтруем клиентов по региону и/или менеджеру, если выбран фильтр
+            const regionFilter = document.getElementById('regionFilter')?.value;
+            const managerFilter = document.getElementById('managerFilter')?.value;
+            let clientsToCheck = allClients;
+            
+            if (regionFilter && regionFilter !== 'all' && managerFilter && managerFilter !== 'all') {
+                // Если выбран и регион, и менеджер - проверяем, что менеджер работает в регионе
+                // Находим менеджеров, работающих в выбранном регионе из отфильтрованных заказов
+                const managersInRegion = new Set();
+                filteredOrders.forEach(order => {
+                    if (order['Бизнес регион'] === regionFilter && order['Менеджер']) {
+                        managersInRegion.add(order['Менеджер']);
+                    }
+                });
+                
+                // Фильтруем клиентов: менеджер должен быть и в регионе, и совпадать с выбранным
+                if (managersInRegion.has(managerFilter)) {
+                    clientsToCheck = allClients.filter(client => {
+                        const manager = client['Основной менеджер'];
+                        return manager && manager === managerFilter;
+                    });
+                } else {
+                    // Если менеджер не работает в выбранном регионе - нет клиентов для проверки
+                    clientsToCheck = [];
+                }
+            } else if (regionFilter && regionFilter !== 'all') {
+                // Если выбран только регион - находим менеджеров региона и их клиентов
+                const managersInRegion = new Set();
+                filteredOrders.forEach(order => {
+                    if (order['Бизнес регион'] === regionFilter && order['Менеджер']) {
+                        managersInRegion.add(order['Менеджер']);
+                    }
+                });
+                
+                // Фильтруем клиентов по менеджерам региона
+                clientsToCheck = allClients.filter(client => {
+                    const manager = client['Основной менеджер'];
+                    return manager && managersInRegion.has(manager);
+                });
+            } else if (managerFilter && managerFilter !== 'all') {
+                // Если выбран только менеджер (без региона)
+                // Фильтруем клиентов по выбранному менеджеру
+                clientsToCheck = allClients.filter(client => {
+                    const manager = client['Основной менеджер'];
+                    return manager && manager === managerFilter;
+                });
+            }
+
+            // Находим мертвых клиентов (нет в активных)
+            // Используем ТОЧНОЕ совпадение без нормализации
+            let activeCount = 0;
+            let deadCount = 0;
+
+            clientsToCheck.forEach(client => {
+                const clientName = client['Наименование'] || '';
+                // Убираем только первый пробел в начале, если есть, и пробелы в конце
+                // НЕ нормализуем, НЕ приводим к нижнему регистру
+                let normalizedClientName = clientName.trimStart().trimEnd();
+                
+                // Проверяем ТОЧНОЕ совпадение
+                let isActive = false;
+                if (activeClients.has(normalizedClientName)) {
+                    isActive = true;
+                }
+                
+                if (isActive) {
+                    activeCount++;
+                } else {
+                    deadCount++;
+                }
+            });
+
+            // Обновляем отображение
+            document.getElementById('activeClientsCount').textContent = formatMoney(activeCount);
+            document.getElementById('deadClientsCount').textContent = formatMoney(deadCount);
+        }
+
+        function fillTables() {
+            // Таблица клиентов
+            fillClientsTable();
+            
+            // Таблица клиентов по месяцам
+            fillClientsMonthlyTable();
+            
+            // Таблица мертвых клиентов
+            if (typeof fillDeadClientsTable === 'function') {
+                fillDeadClientsTable();
+            }
+            
+            // Таблица по месяцам
+            const totalAllRevenue = allOrders.reduce((sum, o) => sum + parseAmount(o['Сумма']), 0);
+            const monthlyTableBody = document.getElementById('monthlyTableBody');
+            monthlyTableBody.innerHTML = '';
+            
+            monthlyData.forEach(month => {
+                const revenue = month.orders.reduce((sum, o) => sum + parseAmount(o['Сумма']), 0);
+                const orders = month.orders.length;
+                const avgCheck = orders > 0 ? revenue / orders : 0;
+                const clients = new Set(month.orders.map(o => o['Клиент']).filter(Boolean)).size;
+                const share = totalAllRevenue > 0 ? (revenue / totalAllRevenue) * 100 : 0;
+                
+                const tr = document.createElement('tr');
+                tr.className = 'bg-slate-900 hover:bg-slate-800/80 transition text-xs';
+                tr.innerHTML = `
+                    <td class="px-3 py-2 rounded-l-xl">${month.name}</td>
+                    <td class="px-3 py-2 text-right">${formatMoney(revenue)}</td>
+                    <td class="px-3 py-2 text-right">${formatMoney(orders)}</td>
+                    <td class="px-3 py-2 text-right">${formatMoney(avgCheck)}</td>
+                    <td class="px-3 py-2 text-right">${formatMoney(clients)}</td>
+                    <td class="px-3 py-2 text-right rounded-r-xl">${share.toFixed(1)}%</td>
+                `;
+                monthlyTableBody.appendChild(tr);
+            });
+
+            // Таблица менеджеров
+            const managerStats = {};
+            const totalRevenue = filteredOrders.reduce((sum, o) => sum + parseAmount(o['Сумма']), 0);
+
+            filteredOrders.forEach(order => {
+                const manager = order['Менеджер'] || 'Не указан';
+                if (!managerStats[manager]) {
+                    managerStats[manager] = { revenue: 0, orders: 0, clients: new Set() };
+                }
+                managerStats[manager].revenue += parseAmount(order['Сумма']);
+                managerStats[manager].orders += 1;
+                if (order['Клиент']) {
+                    managerStats[manager].clients.add(order['Клиент']);
+                }
+            });
+
+            const managersArray = Object.entries(managerStats)
+                .map(([name, stats]) => ({
+                    name,
+                    revenue: stats.revenue,
+                    orders: stats.orders,
+                    avgCheck: stats.orders > 0 ? stats.revenue / stats.orders : 0,
+                    clients: stats.clients.size,
+                    share: totalRevenue > 0 ? (stats.revenue / totalRevenue) * 100 : 0
+                }))
+                .sort((a, b) => b.revenue - a.revenue);
+
+            const managersTableBody = document.getElementById('managersTableBody');
+            managersTableBody.innerHTML = '';
+            managersArray.forEach(m => {
+                const tr = document.createElement('tr');
+                tr.className = 'bg-slate-900 hover:bg-slate-800/80 transition text-xs';
+                tr.innerHTML = `
+                    <td class="px-3 py-2 rounded-l-xl">${m.name}</td>
+                    <td class="px-3 py-2 text-right">${formatMoney(m.revenue)}</td>
+                    <td class="px-3 py-2 text-right">${formatMoney(m.orders)}</td>
+                    <td class="px-3 py-2 text-right">${formatMoney(m.avgCheck)}</td>
+                    <td class="px-3 py-2 text-right">${formatMoney(m.clients)}</td>
+                    <td class="px-3 py-2 text-right rounded-r-xl">${m.share.toFixed(1)}%</td>
+                `;
+                managersTableBody.appendChild(tr);
+            });
+
+            // Таблица регионов
+            const regionStats = {};
+            filteredOrders.forEach(order => {
+                const region = order['Бизнес регион'] || 'Не указан';
+                if (!regionStats[region]) {
+                    regionStats[region] = { 
+                        revenue: 0, 
+                        orders: 0, 
+                        clients: new Set(),
+                        managers: new Set()
+                    };
+                }
+                regionStats[region].revenue += parseAmount(order['Сумма']);
+                regionStats[region].orders += 1;
+                if (order['Клиент']) {
+                    regionStats[region].clients.add(order['Клиент']);
+                }
+                if (order['Менеджер']) {
+                    regionStats[region].managers.add(order['Менеджер']);
+                }
+            });
+
+            const regionsArray = Object.entries(regionStats)
+                .map(([name, stats]) => ({
+                    name,
+                    revenue: stats.revenue,
+                    orders: stats.orders,
+                    avgCheck: stats.orders > 0 ? stats.revenue / stats.orders : 0,
+                    clients: stats.clients.size,
+                    managers: stats.managers.size,
+                    share: totalRevenue > 0 ? (stats.revenue / totalRevenue) * 100 : 0
+                }))
+                .sort((a, b) => b.revenue - a.revenue);
+
+            const regionsTableBody = document.getElementById('regionsTableBody');
+            regionsTableBody.innerHTML = '';
+            regionsArray.forEach(r => {
+                const tr = document.createElement('tr');
+                tr.className = 'bg-slate-900 hover:bg-slate-800/80 transition text-xs';
+                tr.innerHTML = `
+                    <td class="px-3 py-2 rounded-l-xl">${r.name}</td>
+                    <td class="px-3 py-2 text-right">${formatMoney(r.revenue)}</td>
+                    <td class="px-3 py-2 text-right">${formatMoney(r.orders)}</td>
+                    <td class="px-3 py-2 text-right">${formatMoney(r.avgCheck)}</td>
+                    <td class="px-3 py-2 text-right">${formatMoney(r.clients)}</td>
+                    <td class="px-3 py-2 text-right">${formatMoney(r.managers)}</td>
+                    <td class="px-3 py-2 text-right rounded-r-xl">${r.share.toFixed(1)}%</td>
+                `;
+                regionsTableBody.appendChild(tr);
+            });
+        }
+
+        // Обработчики событий
+        document.querySelectorAll('.period-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.period-btn').forEach(b => {
+                    b.classList.remove('bg-emerald-500', 'text-slate-900');
+                    b.classList.add('bg-slate-800', 'text-slate-300');
+                });
+                this.classList.remove('bg-slate-800', 'text-slate-300');
+                this.classList.add('bg-emerald-500', 'text-slate-900');
+                applyFilters();
+            });
+        });
+
+        document.getElementById('regionFilter').addEventListener('change', applyFilters);
+        document.getElementById('managerFilter').addEventListener('change', applyFilters);
+        document.getElementById('statusFilter').addEventListener('change', applyFilters);
+
+        function updateComparisonKPIs() {
+            calculateKPIs();
+        }
+        document.getElementById('searchInput').addEventListener('input', debounce(applyFilters, 300));
+
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // Экспорт данных
+        document.getElementById('exportBtn').addEventListener('click', function() {
+            const data = {
+                summary: {
+                    totalRevenue: filteredOrders.reduce((sum, o) => sum + parseAmount(o['Сумма']), 0),
+                    totalOrders: filteredOrders.length,
+                    uniqueClients: new Set(filteredOrders.map(o => o['Клиент']).filter(Boolean)).size,
+                    avgCheck: filteredOrders.length > 0 
+                        ? filteredOrders.reduce((sum, o) => sum + parseAmount(o['Сумма']), 0) / filteredOrders.length 
+                        : 0
+                },
+                orders: filteredOrders,
+                exportDate: new Date().toISOString()
+            };
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `orders_export_${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        // Экспорт клиентов по месяцам в XLSX
+        function exportClientsMonthlyToXLSX() {
+            if (!clientsMonthlyData || clientsMonthlyData.length === 0) {
+                alert('Нет данных для экспорта');
+                return;
+            }
+
+            // Получаем информацию о текущих фильтрах
+            const regionFilter = document.getElementById('regionFilter')?.value || 'all';
+            const managerFilter = document.getElementById('managerFilter')?.value || 'all';
+            const statusFilter = document.getElementById('statusFilter')?.value || 'all';
+            const searchInput = document.getElementById('searchInput')?.value || '';
+            const startDate = document.getElementById('startDate')?.value || '';
+            const endDate = document.getElementById('endDate')?.value || '';
+            
+            // Формируем название файла с информацией о фильтрах
+            let fileName = 'Клиенты_по_месяцам';
+            const filterParts = [];
+            if (regionFilter !== 'all') {
+                const regionName = regionFilter.replace(/[<>:"/\\|?*]/g, '_').substring(0, 30);
+                filterParts.push(`Регион_${regionName}`);
+            }
+            if (managerFilter !== 'all') {
+                const managerName = managerFilter.replace(/[<>:"/\\|?*]/g, '_').substring(0, 30);
+                filterParts.push(`Менеджер_${managerName}`);
+            }
+            if (statusFilter !== 'all') {
+                const statusName = statusFilter.replace(/[<>:"/\\|?*]/g, '_').substring(0, 30);
+                filterParts.push(`Статус_${statusName}`);
+            }
+            if (searchInput) {
+                const searchName = searchInput.replace(/[<>:"/\\|?*]/g, '_').substring(0, 20);
+                filterParts.push(`Поиск_${searchName}`);
+            }
+            if (startDate && endDate) {
+                filterParts.push(`${startDate}_${endDate}`);
+            }
+            if (filterParts.length > 0) {
+                fileName += '_' + filterParts.join('_');
+            }
+            fileName += '_' + new Date().toISOString().split('T')[0] + '.xlsx';
+
+            // Получаем информацию о месяцах из сохраненных данных
+            const monthsInfo = clientsMonthlyData.monthsInfo || [];
+            if (monthsInfo.length === 0) {
+                alert('Нет данных о месяцах для экспорта');
+                return;
+            }
+            
+            // Фильтруем только данные клиентов (не monthsInfo)
+            const clientsData = Array.isArray(clientsMonthlyData) 
+                ? clientsMonthlyData.filter(item => item && item.name && !item.monthsInfo)
+                : [];
+            
+            // Подготавливаем данные для экспорта
+            const exportData = clientsData.map(client => {
+                const row = { 'Клиент': client.name };
+                
+                // Добавляем данные по каждому месяцу
+                monthsInfo.forEach((month, monthIndex) => {
+                    const monthKey = `month${monthIndex}`;
+                    const monthData = client[monthKey] || { orders: 0, revenue: 0, avgCheck: 0 };
+                    row[`${month.name} - Заказов`] = monthData.orders;
+                    row[`${month.name} - Сумма, ₽`] = monthData.revenue;
+                    row[`${month.name} - Средний чек, ₽`] = Math.round(monthData.avgCheck);
+                });
+                
+                // Итого
+                row['Итого - Заказов'] = client.total.orders;
+                row['Итого - Сумма, ₽'] = client.total.revenue;
+                row['Итого - Средний чек, ₽'] = Math.round(client.total.avgCheck);
+                
+                return row;
+            });
+
+            // Добавляем итоговую строку
+            const totals = { 'Клиент': 'ИТОГО' };
+            
+            // Итого по каждому месяцу
+            monthsInfo.forEach((month, monthIndex) => {
+                const monthKey = `month${monthIndex}`;
+                const monthOrders = clientsData.reduce((sum, c) => sum + (c[monthKey]?.orders || 0), 0);
+                const monthRevenue = clientsData.reduce((sum, c) => sum + (c[monthKey]?.revenue || 0), 0);
+                const monthAvgCheck = monthOrders > 0 ? Math.round(monthRevenue / monthOrders) : 0;
+                
+                totals[`${month.name} - Заказов`] = monthOrders;
+                totals[`${month.name} - Сумма, ₽`] = monthRevenue;
+                totals[`${month.name} - Средний чек, ₽`] = monthAvgCheck;
+            });
+            
+            // Итого общее
+            const totalAllOrders = clientsData.reduce((sum, c) => sum + (c.total?.orders || 0), 0);
+            const totalAllRevenue = clientsData.reduce((sum, c) => sum + (c.total?.revenue || 0), 0);
+            const totalAllAvgCheck = totalAllOrders > 0 ? Math.round(totalAllRevenue / totalAllOrders) : 0;
+            
+            totals['Итого - Заказов'] = totalAllOrders;
+            totals['Итого - Сумма, ₽'] = totalAllRevenue;
+            totals['Итого - Средний чек, ₽'] = totalAllAvgCheck;
+
+            exportData.push(totals);
+
+            // Создаем книгу Excel
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.json_to_sheet(exportData);
+
+            // Настраиваем ширину столбцов динамически
+            const colWidths = [{ wch: 40 }]; // Клиент
+            
+            // По 3 столбца на каждый месяц
+            monthsInfo.forEach(() => {
+                colWidths.push({ wch: 12 }); // Заказов
+                colWidths.push({ wch: 15 }); // Сумма
+                colWidths.push({ wch: 18 }); // Средний чек
+            });
+            
+            // Итого
+            colWidths.push({ wch: 12 }); // Заказов
+            colWidths.push({ wch: 15 }); // Сумма
+            colWidths.push({ wch: 18 }); // Средний чек
+            
+            ws['!cols'] = colWidths;
+
+            // Добавляем лист в книгу
+            XLSX.utils.book_append_sheet(wb, ws, 'Клиенты по месяцам');
+
+            // Экспортируем файл
+            XLSX.writeFile(wb, fileName);
+        }
+
+        // Обработчик кнопки экспорта клиентов по месяцам
+        const exportClientsMonthlyBtn = document.getElementById('exportClientsMonthlyBtn');
+        if (exportClientsMonthlyBtn) {
+            exportClientsMonthlyBtn.addEventListener('click', exportClientsMonthlyToXLSX);
+        }
+
+        // Инициализация отчета за период
+        function initPeriodReport() {
+            // Устанавливаем значения по умолчанию для периода (Сентябрь, Октябрь, Ноябрь текущего года)
+            const currentYear = new Date().getFullYear();
+            const startDateEl = document.getElementById('periodReportStartDate');
+            const endDateEl = document.getElementById('periodReportEndDate');
+            
+            if (startDateEl && endDateEl) {
+                // Находим минимальную и максимальную даты из данных
+                const datesWithFullDates = allOrders
+                    .map(o => parseDate(o['Дата']))
+                    .filter(d => d !== null);
+                
+                if (datesWithFullDates.length > 0) {
+                    const minDate = datesWithFullDates.reduce((min, d) => {
+                        const date = new Date(d.year, d.month - 1, d.day);
+                        return date < min ? date : min;
+                    }, new Date(datesWithFullDates[0].year, datesWithFullDates[0].month - 1, datesWithFullDates[0].day));
+                    
+                    const maxDate = datesWithFullDates.reduce((max, d) => {
+                        const date = new Date(d.year, d.month - 1, d.day);
+                        return date > max ? date : max;
+                    }, new Date(datesWithFullDates[0].year, datesWithFullDates[0].month - 1, datesWithFullDates[0].day));
+                    
+                    startDateEl.setAttribute('min', minDate.toISOString().split('T')[0]);
+                    startDateEl.setAttribute('max', maxDate.toISOString().split('T')[0]);
+                    endDateEl.setAttribute('min', minDate.toISOString().split('T')[0]);
+                    endDateEl.setAttribute('max', maxDate.toISOString().split('T')[0]);
+                    
+                    // Устанавливаем по умолчанию последние 3 месяца из данных
+                    const last3Months = splitInto3Months(allOrders);
+                    
+                    if (last3Months.length > 0) {
+                        // Берем первый и последний месяц из последних 3
+                        const firstMonth = last3Months[0];
+                        const lastMonth = last3Months[last3Months.length - 1];
+                        
+                        // Находим первую и последнюю дату в этих месяцах
+                        const firstMonthOrders = firstMonth.orders
+                            .map(o => parseDate(o['Дата']))
+                            .filter(d => d !== null);
+                        const lastMonthOrders = lastMonth.orders
+                            .map(o => parseDate(o['Дата']))
+                            .filter(d => d !== null);
+                        
+                        if (firstMonthOrders.length > 0 && lastMonthOrders.length > 0) {
+                            const firstDate = firstMonthOrders.reduce((min, d) => {
+                                const date = new Date(d.year, d.month - 1, d.day);
+                                return date < min ? date : min;
+                            }, new Date(firstMonthOrders[0].year, firstMonthOrders[0].month - 1, firstMonthOrders[0].day));
+                            
+                            const lastDate = lastMonthOrders.reduce((max, d) => {
+                                const date = new Date(d.year, d.month - 1, d.day);
+                                return date > max ? date : max;
+                            }, new Date(lastMonthOrders[0].year, lastMonthOrders[0].month - 1, lastMonthOrders[0].day));
+                            
+                            startDateEl.value = firstDate.toISOString().split('T')[0];
+                            endDateEl.value = lastDate.toISOString().split('T')[0];
+                        } else {
+                            // Fallback: используем последние 3 месяца от максимальной даты
+                            const last3MonthsStart = new Date(maxDate);
+                            last3MonthsStart.setMonth(last3MonthsStart.getMonth() - 2);
+                            last3MonthsStart.setDate(1);
+                            
+                            if (last3MonthsStart >= minDate) {
+                                startDateEl.value = last3MonthsStart.toISOString().split('T')[0];
+                                endDateEl.value = maxDate.toISOString().split('T')[0];
+                            } else {
+                                startDateEl.value = minDate.toISOString().split('T')[0];
+                                endDateEl.value = maxDate.toISOString().split('T')[0];
+                            }
+                        }
+                    } else {
+                        // Если нет данных, используем весь диапазон
+                        startDateEl.value = minDate.toISOString().split('T')[0];
+                        endDateEl.value = maxDate.toISOString().split('T')[0];
+                    }
+                }
+                
+                // Обработчики изменения дат
+                startDateEl.addEventListener('change', function() {
+                    if (startDateEl.value && endDateEl.value && startDateEl.value > endDateEl.value) {
+                        endDateEl.value = startDateEl.value;
+                    }
+                    updatePeriodReport();
+                });
+                
+                endDateEl.addEventListener('change', function() {
+                    if (startDateEl.value && endDateEl.value && startDateEl.value > endDateEl.value) {
+                        startDateEl.value = endDateEl.value;
+                    }
+                    updatePeriodReport();
+                });
+            }
+            
+            // Обработчики переключения режимов
+            document.querySelectorAll('.period-mode-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    document.querySelectorAll('.period-mode-btn').forEach(b => {
+                        b.classList.remove('bg-emerald-500', 'text-slate-900');
+                        b.classList.add('bg-slate-800', 'text-slate-300');
+                    });
+                    this.classList.remove('bg-slate-800', 'text-slate-300');
+                    this.classList.add('bg-emerald-500', 'text-slate-900');
+                    updatePeriodReport();
+                });
+            });
+            
+            // Первоначальное обновление отчета
+            updatePeriodReport();
+        }
+        
+        // Обработчики переключения режимов для "Клиенты по месяцам"
+        document.querySelectorAll('.clients-mode-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.clients-mode-btn').forEach(b => {
+                    b.classList.remove('bg-emerald-500', 'text-slate-900');
+                    b.classList.add('bg-slate-800', 'text-slate-300');
+                });
+                this.classList.remove('bg-slate-800', 'text-slate-300');
+                this.classList.add('bg-emerald-500', 'text-slate-900');
+                // Обновляем таблицу
+                fillClientsMonthlyTable();
+            });
+        });
+
+        // Инициализация
+        loadData();
+    </script>
+</body>
+</html>

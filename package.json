@@ -1,0 +1,19 @@
+{
+  "name": "xlsx-to-json-converter",
+  "version": "1.0.0",
+  "description": "Скрипт для конвертации XLSX файла в структурированный JSON",
+  "main": "xlsx_to_json.js",
+  "scripts": {
+    "convert": "node xlsx_to_json.js",
+    "convert-clients": "node clients_to_json.js",
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["xlsx", "json", "converter"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  }
+}
+
