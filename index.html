@@ -5,20 +5,17 @@
     <title>Отчёт по продажам — Дашборд</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-    <!-- Tailwind CDN с fallback -->
-    <script src="https://cdn.tailwindcss.com" 
-            onerror="console.error('Tailwind CDN не загружен, используйте локальную версию')"></script>
+    <!-- Tailwind CSS (локальный) -->
+    <script src="/public/tailwindcss.js"></script>
     <script>
         // Проверка загрузки Tailwind
-        setTimeout(() => {
-            if (typeof tailwind === 'undefined') {
-                console.warn('Tailwind не загружен, попробуйте обновить страницу');
-            }
-        }, 1000);
+        if (typeof tailwind === 'undefined') {
+            console.error('Tailwind не загружен!');
+        }
     </script>
 
-    <!-- Chart.js CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chart.js (локальный) -->
+    <script src="/public/js/chart.js"></script>
     <script>
         // Проверка загрузки Chart.js
         if (typeof Chart === 'undefined') {
@@ -26,8 +23,8 @@
         }
     </script>
     
-    <!-- SheetJS CDN для экспорта в XLSX -->
-    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <!-- SheetJS для экспорта в XLSX (локальный) -->
+    <script src="/public/js/xlsx.full.min.js"></script>
     <script>
         // Проверка загрузки SheetJS
         if (typeof XLSX === 'undefined') {

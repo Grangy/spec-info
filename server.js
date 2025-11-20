@@ -29,6 +29,13 @@ const server = http.createServer((req, res) => {
     if (filePath === './' || filePath === './index.html') {
         filePath = './index.html';
     }
+    
+    // Если запрос к файлам из public, используем правильный путь
+    if (filePath.startsWith('./public/')) {
+        // Путь уже правильный
+    } else if (req.url.startsWith('/public/')) {
+        filePath = '.' + req.url.split('?')[0];
+    }
 
     const extname = String(path.extname(filePath)).toLowerCase();
     const contentType = MIME_TYPES[extname] || 'application/octet-stream';
