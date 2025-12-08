@@ -1,7 +1,9 @@
 # Данные БД (XLSX и JSON файлы с данными)
 *.xlsx
 orders.json
+orders_new.json
 clients_all.json
+backup/
 
 # Node modules
 node_modules/

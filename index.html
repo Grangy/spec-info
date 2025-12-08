@@ -84,6 +84,20 @@
                 </div>
             </div>
             <div class="flex items-center gap-4">
+                <nav class="flex items-center gap-2">
+                    <a
+                        href="/"
+                        class="px-3 py-1.5 rounded-xl text-xs font-medium bg-emerald-500 text-slate-900 hover:bg-emerald-400 transition"
+                    >
+                        📊 Дашборд
+                    </a>
+                    <a
+                        href="/performance.html"
+                        class="px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition border border-slate-700"
+                    >
+                        ⏱️ Успеваемость
+                    </a>
+                </nav>
                 <button
                     id="exportBtn"
                     class="px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition border border-slate-700"
@@ -365,22 +379,8 @@
                 </div>
             </div>
             
-            <!-- Выбор периода и режима -->
+            <!-- Выбор режима -->
             <div class="flex flex-wrap items-center gap-3 mb-4">
-                <div class="flex items-center gap-2">
-                    <label class="text-xs text-slate-400">Период отчета:</label>
-                    <input
-                        type="date"
-                        id="periodReportStartDate"
-                        class="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-100"
-                    />
-                    <span class="text-xs text-slate-500">—</span>
-                    <input
-                        type="date"
-                        id="periodReportEndDate"
-                        class="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-100"
-                    />
-                </div>
                 <div class="flex items-center gap-2">
                     <label class="text-xs text-slate-400">Режим:</label>
                     <div class="flex gap-1">
@@ -404,11 +404,76 @@
                         </button>
                     </div>
                 </div>
+                <p class="text-xs text-slate-500">Период берется из фильтров вверху</p>
             </div>
             
             <!-- Контейнер для отображения данных -->
             <div id="periodReportContainer" class="grid gap-4">
                 <!-- Данные будут вставлены динамически -->
+            </div>
+        </section>
+
+        <!-- Заказы с сайта -->
+        <section class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 md:p-5 fade-in">
+            <div class="mb-3">
+                <h2 class="text-sm font-semibold">Заказы с сайта</h2>
+                <p class="text-xs text-slate-400" id="siteOrdersDescription">
+                    Статистика по заказам, сделанным через сайт за выбранный период
+                </p>
+            </div>
+            
+            <!-- Метрики -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div class="bg-slate-900/80 rounded-xl p-4 border border-slate-700">
+                    <div class="text-xs text-slate-400 mb-1">Количество заказов</div>
+                    <div class="text-2xl font-semibold text-emerald-400" id="siteOrdersCount">–</div>
+                    <div class="text-[10px] text-slate-500 mt-1">заказов с сайта</div>
+                </div>
+                <div class="bg-slate-900/80 rounded-xl p-4 border border-slate-700">
+                    <div class="text-xs text-slate-400 mb-1">Средний чек</div>
+                    <div class="text-2xl font-semibold text-sky-400" id="siteOrdersAvgCheck">–</div>
+                    <div class="text-[10px] text-slate-500 mt-1">₽</div>
+                </div>
+                <div class="bg-slate-900/80 rounded-xl p-4 border border-slate-700">
+                    <div class="text-xs text-slate-400 mb-1">Сумма заказов</div>
+                    <div class="text-2xl font-semibold text-indigo-400" id="siteOrdersRevenue">–</div>
+                    <div class="text-[10px] text-slate-500 mt-1">₽</div>
+                </div>
+            </div>
+
+            <!-- Выручка по месяцам с сайта -->
+            <div class="mt-4 mb-4">
+                <h3 class="text-xs font-semibold mb-2 text-slate-300">Выручка по месяцам с сайта</h3>
+                <div id="siteOrdersMonthlyContainer" class="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+                    <!-- Данные будут вставлены динамически -->
+                </div>
+            </div>
+
+            <!-- Основные клиенты с сайта -->
+            <div class="mt-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="text-xs font-semibold text-slate-300">Основные клиенты, заказывающие с сайта</h3>
+                    <div class="text-[10px] text-slate-500 bg-slate-800/50 px-2 py-1 rounded">
+                        Исключены: Сайт Сайт, Неизвестный партнер, Розничный покупатель, СПЕЦИАЛИСТ-1, специалист 2
+                    </div>
+                </div>
+                <div class="bg-slate-900/80 rounded-xl border border-slate-700 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs">
+                            <thead class="bg-slate-800/50">
+                                <tr>
+                                    <th class="text-left px-4 py-2 text-slate-400 font-medium">Клиент</th>
+                                    <th class="text-right px-4 py-2 text-slate-400 font-medium">Заказов</th>
+                                    <th class="text-right px-4 py-2 text-slate-400 font-medium">Сумма, ₽</th>
+                                    <th class="text-right px-4 py-2 text-slate-400 font-medium">Ср. чек, ₽</th>
+                                </tr>
+                            </thead>
+                            <tbody id="siteOrdersClientsTable" class="divide-y divide-slate-800">
+                                <!-- Данные будут вставлены динамически -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -559,6 +624,15 @@
                         </p>
                     </div>
                 </div>
+                
+                <!-- Диаграмма выручки по месяцам -->
+                <div class="mb-4 bg-slate-900/80 rounded-xl p-4 border border-slate-700">
+                    <h3 class="text-xs font-semibold mb-3 text-slate-300">Диаграмма выручки по месяцам</h3>
+                    <div class="h-64">
+                        <canvas id="monthlyRevenueChart"></canvas>
+                    </div>
+                </div>
+                
                 <div class="overflow-x-auto scrollbar-thin">
                     <table class="min-w-full text-xs border-separate border-spacing-y-1">
                         <thead class="text-[11px] uppercase text-slate-400">
@@ -749,7 +823,7 @@
         async function loadData() {
             try {
                 // Загружаем заказы
-                const ordersResponse = await fetch('orders.json');
+                const ordersResponse = await fetch('orders_new.json');
                 allOrders = await ordersResponse.json();
                 filteredOrders = [...allOrders];
                 
@@ -793,6 +867,11 @@
             
             // Инициализация обработчиков раскрытия/сворачивания
             initToggleHandlers();
+            
+            // Обновляем отчет по заказам с сайта
+            if (typeof updateSiteOrdersReport === 'function') {
+                updateSiteOrdersReport();
+            }
         }
 
         function initToggleHandlers() {
@@ -1177,6 +1256,10 @@
             // Обновляем отчет за период при изменении фильтров
             if (typeof updatePeriodReport === 'function') {
                 updatePeriodReport();
+            }
+            // Обновляем отчет по заказам с сайта
+            if (typeof updateSiteOrdersReport === 'function') {
+                updateSiteOrdersReport();
             }
         }
 
@@ -1641,8 +1724,9 @@
 
         // Обновление отчета за период
         function updatePeriodReport() {
-            const startDateEl = document.getElementById('periodReportStartDate');
-            const endDateEl = document.getElementById('periodReportEndDate');
+            // Используем даты из верхних фильтров
+            const startDateEl = document.getElementById('startDate');
+            const endDateEl = document.getElementById('endDate');
             const modeBtn = document.querySelector('.period-mode-btn.bg-emerald-500');
             const mode = modeBtn ? modeBtn.dataset.periodMode : 'months';
             
@@ -1651,18 +1735,34 @@
             const startDateStr = startDateEl.value;
             const endDateStr = endDateEl.value;
             
-            // Если период не выбран, используем данные по умолчанию (Сентябрь, Октябрь, Ноябрь)
+            // Если период не выбран, используем данные по умолчанию
             let startDate, endDate;
             if (startDateStr && endDateStr) {
                 startDate = new Date(startDateStr);
                 endDate = new Date(endDateStr);
                 endDate.setHours(23, 59, 59, 999);
             } else {
-                // По умолчанию - последние 3 месяца из данных
-                const currentYear = new Date().getFullYear();
-                startDate = new Date(currentYear, 8, 1); // Сентябрь
-                endDate = new Date(currentYear, 10, 30); // Ноябрь
-                endDate.setHours(23, 59, 59, 999);
+                // По умолчанию - используем все отфильтрованные заказы
+                const periodOrders = filteredOrders;
+                if (periodOrders.length === 0) {
+                    document.getElementById('periodReportContainer').innerHTML = '<div class="text-center text-slate-400 py-8">Нет данных</div>';
+                    return;
+                }
+                
+                // Находим минимальную и максимальную дату из отфильтрованных заказов
+                const dates = periodOrders
+                    .map(o => parseDate(o['Дата']))
+                    .filter(d => d !== null)
+                    .map(d => new Date(d.year, d.month - 1, d.day));
+                
+                if (dates.length > 0) {
+                    startDate = new Date(Math.min(...dates));
+                    endDate = new Date(Math.max(...dates));
+                    endDate.setHours(23, 59, 59, 999);
+                } else {
+                    document.getElementById('periodReportContainer').innerHTML = '<div class="text-center text-slate-400 py-8">Нет данных с датами</div>';
+                    return;
+                }
             }
             
             // Получаем отфильтрованные заказы для периода
@@ -1772,6 +1872,207 @@
                     <div class="text-xs text-slate-400 mt-1">Клиенты: ${formatMoney(uniqueClients)}</div>
                 `;
                 container.appendChild(div);
+            });
+        }
+
+        // Обновление отчета по заказам с сайта
+        function updateSiteOrdersReport() {
+            // Проверяем, что данные загружены
+            if (!filteredOrders || filteredOrders.length === 0) {
+                console.warn('updateSiteOrdersReport: filteredOrders пуст');
+                const countEl = document.getElementById('siteOrdersCount');
+                const avgEl = document.getElementById('siteOrdersAvgCheck');
+                const revenueEl = document.getElementById('siteOrdersRevenue');
+                const descEl = document.getElementById('siteOrdersDescription');
+                const tableBody = document.getElementById('siteOrdersClientsTable');
+                if (countEl) countEl.textContent = '0';
+                if (avgEl) avgEl.textContent = '0';
+                if (revenueEl) revenueEl.textContent = '0';
+                if (descEl) descEl.textContent = 'Статистика по заказам, сделанным через сайт';
+                if (tableBody) tableBody.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-slate-400">Нет данных</td></tr>';
+                return;
+            }
+            
+            // Получаем даты из верхних фильтров
+            const startDateEl = document.getElementById('startDate');
+            const endDateEl = document.getElementById('endDate');
+            
+            // Список клиентов, которые исключаются из отчета
+            const excludedClients = [
+                'Сайт Сайт',
+                'Неизвестный партнер',
+                'Розничный покупатель',
+                'СПЕЦИАЛИСТ-1',
+                'специалист 2'
+            ];
+            
+            // Фильтруем заказы с сайта (проверяем и boolean true, и строку "true" на всякий случай)
+            // И исключаем указанных клиентов
+            let siteOrders = filteredOrders.filter(order => {
+                const siteValue = order['сайт'];
+                const client = order['Клиент'] || '';
+                const isSiteOrder = siteValue === true || siteValue === 'true' || siteValue === 1;
+                const isExcluded = excludedClients.some(excluded => 
+                    client.trim() === excluded.trim()
+                );
+                return isSiteOrder && !isExcluded;
+            });
+            
+            // Если выбраны даты, дополнительно фильтруем по периоду
+            if (startDateEl && endDateEl && startDateEl.value && endDateEl.value) {
+                const startDate = new Date(startDateEl.value);
+                const endDate = new Date(endDateEl.value);
+                endDate.setHours(23, 59, 59, 999);
+                
+                siteOrders = siteOrders.filter(order => {
+                    const parsedDate = parseDate(order['Дата']);
+                    if (!parsedDate) return false;
+                    const orderDate = new Date(parsedDate.year, parsedDate.month - 1, parsedDate.day);
+                    return orderDate >= startDate && orderDate <= endDate;
+                });
+            }
+            
+            // Рассчитываем метрики
+            const ordersCount = siteOrders.length;
+            const totalRevenue = siteOrders.reduce((sum, o) => sum + parseAmount(o['Сумма']), 0);
+            const avgCheck = ordersCount > 0 ? totalRevenue / ordersCount : 0;
+            
+            // Обновляем метрики (с проверкой существования элементов)
+            const countEl = document.getElementById('siteOrdersCount');
+            const avgEl = document.getElementById('siteOrdersAvgCheck');
+            const revenueEl = document.getElementById('siteOrdersRevenue');
+            const descEl = document.getElementById('siteOrdersDescription');
+            
+            if (countEl) countEl.textContent = formatMoney(ordersCount);
+            if (avgEl) avgEl.textContent = formatMoney(avgCheck);
+            if (revenueEl) revenueEl.textContent = formatMoney(totalRevenue);
+            
+            // Обновляем описание
+            let description = 'Статистика по заказам, сделанным через сайт';
+            if (startDateEl && endDateEl && startDateEl.value && endDateEl.value) {
+                const startDate = new Date(startDateEl.value);
+                const endDate = new Date(endDateEl.value);
+                description += ` за период ${startDate.toLocaleDateString('ru-RU')} - ${endDate.toLocaleDateString('ru-RU')}`;
+            }
+            description += ' (исключены: Сайт Сайт, Неизвестный партнер, Розничный покупатель, СПЕЦИАЛИСТ-1, специалист 2)';
+            if (descEl) descEl.textContent = description;
+            
+            // Группируем по месяцам для отображения выручки
+            const monthlyStats = {};
+            siteOrders.forEach(order => {
+                const parsedDate = parseDate(order['Дата']);
+                if (!parsedDate) return;
+                
+                const monthKey = `${parsedDate.year}-${String(parsedDate.month).padStart(2, '0')}`;
+                if (!monthlyStats[monthKey]) {
+                    monthlyStats[monthKey] = {
+                        year: parsedDate.year,
+                        month: parsedDate.month,
+                        orders: 0,
+                        revenue: 0
+                    };
+                }
+                monthlyStats[monthKey].orders += 1;
+                monthlyStats[monthKey].revenue += parseAmount(order['Сумма']);
+            });
+            
+            // Сортируем месяцы по дате
+            const monthNames = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 
+                              'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+            
+            const monthlyArray = Object.entries(monthlyStats)
+                .map(([key, stats]) => ({
+                    key,
+                    name: `${monthNames[stats.month - 1]} ${stats.year}`,
+                    orders: stats.orders,
+                    revenue: stats.revenue,
+                    avgCheck: stats.orders > 0 ? stats.revenue / stats.orders : 0,
+                    year: stats.year,
+                    month: stats.month
+                }))
+                .sort((a, b) => {
+                    if (a.year !== b.year) return a.year - b.year;
+                    return a.month - b.month;
+                });
+            
+            // Отображаем плашки по месяцам
+            const monthlyContainer = document.getElementById('siteOrdersMonthlyContainer');
+            if (monthlyContainer) {
+                monthlyContainer.innerHTML = '';
+                
+                if (monthlyArray.length === 0) {
+                    monthlyContainer.innerHTML = '<div class="col-span-full text-center text-slate-400 py-4 text-xs">Нет данных по месяцам</div>';
+                } else {
+                    const colors = [
+                        'bg-emerald-500/20 border-emerald-500/50 text-emerald-400',
+                        'bg-sky-500/20 border-sky-500/50 text-sky-400',
+                        'bg-indigo-500/20 border-indigo-500/50 text-indigo-400',
+                        'bg-amber-500/20 border-amber-500/50 text-amber-400',
+                        'bg-purple-500/20 border-purple-500/50 text-purple-400',
+                        'bg-pink-500/20 border-pink-500/50 text-pink-400',
+                        'bg-cyan-500/20 border-cyan-500/50 text-cyan-400',
+                        'bg-rose-500/20 border-rose-500/50 text-rose-400'
+                    ];
+                    
+                    monthlyArray.forEach((month, index) => {
+                        const colorClass = colors[index % colors.length];
+                        const div = document.createElement('div');
+                        div.className = `bg-slate-900/80 rounded-xl p-3 border ${colorClass}`;
+                        div.innerHTML = `
+                            <div class="text-[10px] text-slate-400 mb-1">${month.name}</div>
+                            <div class="text-lg font-semibold mb-1">${formatMoney(month.revenue)} ₽</div>
+                            <div class="text-[10px] text-slate-500">${formatMoney(month.orders)} заказов</div>
+                            <div class="text-[10px] text-slate-500 mt-0.5">Ср. чек: ${formatMoney(month.avgCheck)} ₽</div>
+                        `;
+                        monthlyContainer.appendChild(div);
+                    });
+                }
+            }
+            
+            // Группируем по клиентам
+            const clientsStats = {};
+            siteOrders.forEach(order => {
+                const client = order['Клиент'] || 'Не указан';
+                if (!clientsStats[client]) {
+                    clientsStats[client] = {
+                        orders: 0,
+                        revenue: 0
+                    };
+                }
+                clientsStats[client].orders += 1;
+                clientsStats[client].revenue += parseAmount(order['Сумма']);
+            });
+            
+            // Сортируем по количеству заказов (по убыванию)
+            const clientsArray = Object.entries(clientsStats)
+                .map(([name, stats]) => ({
+                    name,
+                    orders: stats.orders,
+                    revenue: stats.revenue,
+                    avgCheck: stats.orders > 0 ? stats.revenue / stats.orders : 0
+                }))
+                .sort((a, b) => b.orders - a.orders)
+                .slice(0, 20); // Топ 20 клиентов
+            
+            // Обновляем таблицу
+            const tableBody = document.getElementById('siteOrdersClientsTable');
+            tableBody.innerHTML = '';
+            
+            if (clientsArray.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="4" class="px-4 py-4 text-center text-slate-400">Нет заказов с сайта за выбранный период</td></tr>';
+                return;
+            }
+            
+            clientsArray.forEach((client, index) => {
+                const row = document.createElement('tr');
+                row.className = index % 2 === 0 ? 'bg-slate-900/30' : '';
+                row.innerHTML = `
+                    <td class="px-4 py-2 text-slate-200">${client.name}</td>
+                    <td class="px-4 py-2 text-right text-slate-300">${formatMoney(client.orders)}</td>
+                    <td class="px-4 py-2 text-right text-slate-300">${formatMoney(client.revenue)}</td>
+                    <td class="px-4 py-2 text-right text-slate-300">${formatMoney(client.avgCheck)}</td>
+                `;
+                tableBody.appendChild(row);
             });
         }
 
@@ -2079,6 +2380,144 @@
             
             // Таблица по месяцам
             const totalAllRevenue = allOrders.reduce((sum, o) => sum + parseAmount(o['Сумма']), 0);
+            // Подготовка данных для диаграммы
+            const monthlyChartLabels = [];
+            const monthlyChartRevenue = [];
+            const monthlyChartOrders = [];
+            
+            monthlyData.forEach(month => {
+                const revenue = month.orders.reduce((sum, o) => sum + parseAmount(o['Сумма']), 0);
+                const orders = month.orders.length;
+                monthlyChartLabels.push(month.name);
+                monthlyChartRevenue.push(revenue);
+                monthlyChartOrders.push(orders);
+            });
+            
+            // Создание/обновление диаграммы выручки по месяцам
+            const monthlyChartCtx = document.getElementById('monthlyRevenueChart')?.getContext('2d');
+            if (monthlyChartCtx && typeof Chart !== 'undefined') {
+                if (charts.monthlyRevenue) charts.monthlyRevenue.destroy();
+                
+                charts.monthlyRevenue = new Chart(monthlyChartCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: monthlyChartLabels,
+                        datasets: [
+                            {
+                                label: 'Выручка, ₽',
+                                data: monthlyChartRevenue,
+                                backgroundColor: 'rgba(16, 185, 129, 0.6)',
+                                borderColor: 'rgb(16, 185, 129)',
+                                borderWidth: 2,
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'Количество заказов',
+                                data: monthlyChartOrders,
+                                type: 'line',
+                                backgroundColor: 'rgba(56, 189, 248, 0.2)',
+                                borderColor: 'rgb(56, 189, 248)',
+                                borderWidth: 2,
+                                fill: false,
+                                tension: 0.3,
+                                yAxisID: 'y1'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                labels: { 
+                                    color: '#e5e7eb', 
+                                    font: { size: 11 },
+                                    usePointStyle: true
+                                },
+                                display: true,
+                                position: 'top'
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                                callbacks: {
+                                    label: function(context) {
+                                        if (context.datasetIndex === 0) {
+                                            return 'Выручка: ' + formatMoney(context.parsed.y) + ' ₽';
+                                        } else {
+                                            return 'Заказов: ' + formatMoney(context.parsed.y);
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: { 
+                                    color: '#9ca3af', 
+                                    font: { size: 10 },
+                                    maxRotation: 45,
+                                    minRotation: 45
+                                },
+                                grid: { 
+                                    display: false,
+                                    color: '#1f2937'
+                                }
+                            },
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                ticks: {
+                                    color: '#9ca3af',
+                                    font: { size: 11 },
+                                    callback: function(value) {
+                                        return formatMoney(value) + ' ₽';
+                                    }
+                                },
+                                grid: { 
+                                    color: '#1f2937',
+                                    drawBorder: false
+                                },
+                                title: {
+                                    display: true,
+                                    text: 'Выручка, ₽',
+                                    color: '#9ca3af',
+                                    font: { size: 11 }
+                                }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                ticks: {
+                                    color: '#9ca3af',
+                                    font: { size: 11 },
+                                    callback: function(value) {
+                                        return formatMoney(value);
+                                    }
+                                },
+                                grid: {
+                                    drawOnChartArea: false,
+                                    color: '#1f2937'
+                                },
+                                title: {
+                                    display: true,
+                                    text: 'Количество заказов',
+                                    color: '#9ca3af',
+                                    font: { size: 11 }
+                                }
+                            }
+                        },
+                        interaction: {
+                            mode: 'nearest',
+                            axis: 'x',
+                            intersect: false
+                        }
+                    }
+                });
+            }
+            
             const monthlyTableBody = document.getElementById('monthlyTableBody');
             monthlyTableBody.innerHTML = '';
             

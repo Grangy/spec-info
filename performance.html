@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8" />
+    <title>Успеваемость менеджеров — Дашборд</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- Tailwind CSS (локальный) -->
+    <script src="/public/tailwindcss.js"></script>
+    <script>
+        if (typeof tailwind === 'undefined') {
+            console.error('Tailwind не загружен!');
+        }
+    </script>
+
+    <!-- Chart.js (локальный) -->
+    <script src="/public/js/chart.js"></script>
+    <script>
+        if (typeof Chart === 'undefined') {
+            console.error('Chart.js не загружен!');
+        }
+    </script>
+
+    <style>
+        .scrollbar-thin::-webkit-scrollbar {
+            height: 6px;
+            width: 6px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+            border-radius: 9999px;
+            background: #475569;
+        }
+        .scrollbar-thin::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        input[type="date"] {
+            color-scheme: dark;
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+    <!-- Шапка -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-20">
+        <div class="w-full px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="h-9 w-9 rounded-2xl bg-emerald-500 flex items-center justify-center font-semibold text-slate-900">
+                    S
+                </div>
+                <div>
+                    <h1 class="text-xl font-semibold">Успеваемость менеджеров</h1>
+                    <p class="text-xs text-slate-400">Анализ рабочего времени • первая и последняя заявка</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <nav class="flex items-center gap-2">
+                    <a
+                        href="/"
+                        class="px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800 text-slate-300 hover:bg-slate-700 transition border border-slate-700"
+                    >
+                        📊 Дашборд
+                    </a>
+                    <a
+                        href="/performance.html"
+                        class="px-3 py-1.5 rounded-xl text-xs font-medium bg-emerald-500 text-slate-900 hover:bg-emerald-400 transition"
+                    >
+                        ⏱️ Успеваемость
+                    </a>
+                </nav>
+                <div class="text-right">
+                    <p class="text-xs text-slate-400">Дата формирования отчёта</p>
+                    <p class="text-sm font-medium" id="reportDate"></p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="w-full px-4 py-6 space-y-6">
+        <!-- Индикатор загрузки -->
+        <div id="loadingIndicator" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center">
+            <div class="text-center">
+                <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-emerald-500 border-t-transparent mb-4"></div>
+                <p class="text-sm text-slate-400">Загрузка данных...</p>
+            </div>
+        </div>
+
+        <!-- Фильтры -->
+        <section class="flex flex-wrap items-center justify-between gap-3 fade-in">
+            <div class="flex items-center gap-3 flex-wrap">
+                <div class="flex items-center gap-2">
+                    <label class="text-xs text-slate-400">Период:</label>
+                    <div class="flex items-center gap-2">
+                        <input
+                            type="date"
+                            id="startDate"
+                            class="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-100"
+                        />
+                        <span class="text-xs text-slate-500">—</span>
+                        <input
+                            type="date"
+                            id="endDate"
+                            class="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 text-slate-100"
+                        />
+                        <button
+                            id="clearDateFilter"
+                            class="px-2 py-1.5 text-xs text-slate-400 hover:text-slate-200 transition"
+                            title="Очистить фильтр"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <label class="text-xs text-slate-400">Бизнес-регион:</label>
+                    <select
+                        id="regionFilter"
+                        class="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    >
+                        <option value="all">Все регионы</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            id="excludeWeekends"
+                            checked
+                            class="w-4 h-4 rounded bg-slate-900 border-slate-700 text-emerald-500 focus:ring-emerald-500 focus:ring-2"
+                        />
+                        <span class="text-xs text-slate-400">Исключить выходные (СБ-ВС)</span>
+                    </label>
+                </div>
+            </div>
+        </section>
+
+        <!-- Топ сотрудников -->
+        <section class="grid grid-cols-1 md:grid-cols-2 gap-4 fade-in">
+            <!-- Топ 5 лучших -->
+            <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 md:p-5">
+                <div class="mb-3">
+                    <h2 class="text-sm font-semibold text-emerald-400">🏆 Топ 5 лучших сотрудников</h2>
+                    <p class="text-xs text-slate-400">По основным показателям успеваемости</p>
+                </div>
+                <div id="topBestEmployees" class="space-y-2">
+                    <!-- Данные будут вставлены динамически -->
+                </div>
+            </div>
+            
+            <!-- Топ 5 худших -->
+            <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 md:p-5">
+                <div class="mb-3">
+                    <h2 class="text-sm font-semibold text-red-400">⚠️ Топ 5 худших сотрудников</h2>
+                    <p class="text-xs text-slate-400">По основным показателям успеваемости</p>
+                </div>
+                <div id="topWorstEmployees" class="space-y-2">
+                    <!-- Данные будут вставлены динамически -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Статистика успеваемости -->
+        <section class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 md:p-5 fade-in">
+            <div class="mb-3">
+                <h2 class="text-sm font-semibold">Сравнительная таблица успеваемости</h2>
+                <p class="text-xs text-slate-400" id="performanceDescription">
+                    Время первой и последней заявки по менеджерам
+                </p>
+            </div>
+
+            <div class="overflow-x-auto scrollbar-thin">
+                <table class="min-w-full text-xs border-separate border-spacing-y-1">
+                    <thead class="text-[11px] uppercase text-slate-400">
+                        <tr>
+                            <th class="text-left px-3 py-1.5">Менеджер</th>
+                            <th class="text-right px-3 py-1.5">Среднее время первой заявки</th>
+                            <th class="text-right px-3 py-1.5">Среднее время последней заявки</th>
+                            <th class="text-right px-3 py-1.5">Самая ранняя заявка</th>
+                            <th class="text-right px-3 py-1.5">Самая поздняя заявка</th>
+                            <th class="text-right px-3 py-1.5">Худший день (проспал)</th>
+                            <th class="text-right px-3 py-1.5">Средняя длительность рабочего дня</th>
+                            <th class="text-right px-3 py-1.5">Дней с заявками</th>
+                            <th class="text-right px-3 py-1.5">Всего заявок</th>
+                        </tr>
+                    </thead>
+                    <tbody id="performanceTableBody">
+                        <!-- Данные будут вставлены динамически -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- График успеваемости -->
+        <section class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 md:p-5 fade-in">
+            <div class="mb-3">
+                <h2 class="text-sm font-semibold">График времени первой и последней заявки</h2>
+                <p class="text-xs text-slate-400">Средние значения по менеджерам</p>
+            </div>
+            <div class="h-96">
+                <canvas id="performanceChart"></canvas>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        let allOrders = [];
+        let filteredOrders = [];
+
+        // Утилиты
+        const formatMoney = (value) =>
+            new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(value);
+
+        const formatTime = (hours) => {
+            const h = Math.floor(hours);
+            const m = Math.round((hours - h) * 60);
+            return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+        };
+
+        const parseTime = (timeStr) => {
+            if (!timeStr || typeof timeStr !== 'string') return null;
+            const parts = timeStr.split(':');
+            if (parts.length < 2) return null;
+            const hours = parseInt(parts[0], 10);
+            const minutes = parseInt(parts[1], 10);
+            if (isNaN(hours) || isNaN(minutes)) return null;
+            return hours + minutes / 60; // Возвращаем в десятичных часах
+        };
+
+        const parseDate = (dateStr) => {
+            if (!dateStr || typeof dateStr !== 'string') return null;
+            if (!dateStr.includes('.')) return null;
+            
+            const parts = dateStr.split('.');
+            if (parts.length !== 3) return null;
+            
+            const day = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10);
+            const year = parseInt(parts[2], 10);
+            
+            if (isNaN(day) || isNaN(month) || isNaN(year)) return null;
+            
+            return { day, month, year, dateStr };
+        };
+
+        // Загрузка данных
+        async function loadData() {
+            try {
+                const ordersResponse = await fetch('orders_new.json');
+                allOrders = await ordersResponse.json();
+                filteredOrders = [...allOrders];
+                
+                populateFilters();
+                setDefaultDates();
+                updatePerformanceReport();
+                
+                document.getElementById('loadingIndicator').style.display = 'none';
+            } catch (error) {
+                console.error('Ошибка загрузки данных:', error);
+                document.getElementById('loadingIndicator').innerHTML = 
+                    '<div class="text-center text-red-400"><p>Ошибка загрузки данных</p></div>';
+            }
+        }
+
+        // Заполнение фильтров
+        function populateFilters() {
+            const regionFilter = document.getElementById('regionFilter');
+            const regions = [...new Set(allOrders.map(o => o['Бизнес регион']).filter(Boolean))].sort();
+            
+            regions.forEach(region => {
+                const option = document.createElement('option');
+                option.value = region;
+                option.textContent = region;
+                regionFilter.appendChild(option);
+            });
+        }
+
+        // Применение фильтров
+        function applyFilters() {
+            let filtered = [...allOrders];
+            
+            // Фильтр по календарю
+            const startDateEl = document.getElementById('startDate');
+            const endDateEl = document.getElementById('endDate');
+            const startDateStr = startDateEl ? startDateEl.value : '';
+            const endDateStr = endDateEl ? endDateEl.value : '';
+            
+            if (startDateStr && endDateStr) {
+                const startDate = new Date(startDateStr);
+                const endDate = new Date(endDateStr);
+                endDate.setHours(23, 59, 59, 999);
+                
+                filtered = filtered.filter(order => {
+                    const parsedDate = parseDate(order['Дата']);
+                    if (!parsedDate) return false;
+                    const orderDate = new Date(parsedDate.year, parsedDate.month - 1, parsedDate.day);
+                    return orderDate >= startDate && orderDate <= endDate;
+                });
+            }
+            
+            // Фильтр по региону
+            const region = document.getElementById('regionFilter').value;
+            if (region !== 'all') {
+                filtered = filtered.filter(o => o['Бизнес регион'] === region);
+            }
+            
+            filteredOrders = filtered;
+            updatePerformanceReport();
+        }
+
+        // Проверка, является ли день выходным
+        function isWeekend(year, month, day) {
+            const date = new Date(year, month - 1, day);
+            const dayOfWeek = date.getDay();
+            return dayOfWeek === 0 || dayOfWeek === 6; // 0 = воскресенье, 6 = суббота
+        }
+
+        // Обновление отчета по успеваемости
+        function updatePerformanceReport() {
+            const managerStats = {};
+            const excludeWeekends = document.getElementById('excludeWeekends').checked;
+            
+            // Группируем заказы по менеджерам и дням
+            filteredOrders.forEach(order => {
+                const manager = order['Менеджер'] || 'Не указан';
+                const parsedDate = parseDate(order['Дата']);
+                const time = parseTime(order['время'] || order['Дата_1']);
+                
+                if (!parsedDate || !time) return;
+                
+                // Исключаем выходные, если включена опция
+                if (excludeWeekends && isWeekend(parsedDate.year, parsedDate.month, parsedDate.day)) {
+                    return;
+                }
+                
+                const dateKey = `${parsedDate.year}-${String(parsedDate.month).padStart(2, '0')}-${String(parsedDate.day).padStart(2, '0')}`;
+                
+                if (!managerStats[manager]) {
+                    managerStats[manager] = {};
+                }
+                
+                if (!managerStats[manager][dateKey]) {
+                    managerStats[manager][dateKey] = {
+                        first: time,
+                        last: time,
+                        orders: 0
+                    };
+                } else {
+                    if (time < managerStats[manager][dateKey].first) {
+                        managerStats[manager][dateKey].first = time;
+                    }
+                    if (time > managerStats[manager][dateKey].last) {
+                        managerStats[manager][dateKey].last = time;
+                    }
+                }
+                managerStats[manager][dateKey].orders += 1;
+            });
+            
+            // Список менеджеров, которые не исключаются даже при <100 заявках
+            const excludedFromFilter = ['Светлана', 'Людмила'];
+            
+            // Список менеджеров, которые полностью исключаются из расчета
+            const excludedManagers = [
+                'Хруняк Владислав',
+                'Менеджер',
+                'Специалист-1',
+                'Горлатенко Сергей Викторович'
+            ];
+            
+            // Рассчитываем средние значения по менеджерам
+            const managersArray = Object.entries(managerStats).map(([manager, days]) => {
+                // Исключаем указанных менеджеров
+                if (excludedManagers.some(excluded => manager.trim() === excluded.trim())) {
+                    return null;
+                }
+                const daysArray = Object.entries(days).map(([dateKey, data]) => ({
+                    dateKey,
+                    ...data
+                }));
+                const totalDays = daysArray.length;
+                
+                if (totalDays === 0) return null;
+                
+                const avgFirst = daysArray.reduce((sum, d) => sum + d.first, 0) / totalDays;
+                const avgLast = daysArray.reduce((sum, d) => sum + d.last, 0) / totalDays;
+                const avgDuration = avgLast - avgFirst;
+                const totalOrders = daysArray.reduce((sum, d) => sum + d.orders, 0);
+                
+                // Исключаем менеджеров с <100 заявками, кроме Светланы и Людмилы
+                const isExcluded = excludedFromFilter.some(name => 
+                    manager.toLowerCase().includes(name.toLowerCase())
+                );
+                if (totalOrders < 100 && !isExcluded) {
+                    return null;
+                }
+                
+                // Самая ранняя заявка (минимальное время первой заявки)
+                const earliestFirst = Math.min(...daysArray.map(d => d.first));
+                
+                // Самая поздняя заявка (максимальное время последней заявки)
+                const latestLast = Math.max(...daysArray.map(d => d.last));
+                
+                // Худший день (проспал) - день с самой поздней первой заявкой
+                const worstDay = daysArray.reduce((worst, current) => {
+                    return current.first > worst.first ? current : worst;
+                }, daysArray[0]);
+                
+                return {
+                    manager,
+                    avgFirst,
+                    avgLast,
+                    avgDuration,
+                    totalDays,
+                    totalOrders,
+                    earliestFirst,
+                    latestLast,
+                    worstDay: {
+                        date: worstDay.dateKey,
+                        time: worstDay.first
+                    }
+                };
+            }).filter(Boolean).sort((a, b) => b.totalOrders - a.totalOrders);
+            
+            // Обновляем описание
+            const startDateEl = document.getElementById('startDate');
+            const endDateEl = document.getElementById('endDate');
+            let description = 'Время первой и последней заявки по менеджерам';
+            if (startDateEl && endDateEl && startDateEl.value && endDateEl.value) {
+                const startDate = new Date(startDateEl.value);
+                const endDate = new Date(endDateEl.value);
+                description += ` за период ${startDate.toLocaleDateString('ru-RU')} - ${endDate.toLocaleDateString('ru-RU')}`;
+            }
+            document.getElementById('performanceDescription').textContent = description;
+            
+            // Заполняем таблицу
+            const tableBody = document.getElementById('performanceTableBody');
+            tableBody.innerHTML = '';
+            
+            if (managersArray.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="9" class="px-4 py-4 text-center text-slate-400">Нет данных за выбранный период</td></tr>';
+                return;
+            }
+            
+            // Находим min и max значения для градиентной раскраски
+            const durations = managersArray.map(m => m.avgDuration);
+            const lastTimes = managersArray.map(m => m.avgLast);
+            const totalOrders = managersArray.map(m => m.totalOrders);
+            
+            const minDuration = Math.min(...durations);
+            const maxDuration = Math.max(...durations);
+            const minLastTime = Math.min(...lastTimes);
+            const maxLastTime = Math.max(...lastTimes);
+            const minOrders = Math.min(...totalOrders);
+            const maxOrders = Math.max(...totalOrders);
+            
+            // Функция для расчета цвета от красного к зеленому
+            const getColor = (value, min, max) => {
+                if (max === min) return { r: 34, g: 197, b: 94 }; // Зеленый если все одинаковые
+                const ratio = (value - min) / (max - min);
+                const r = Math.round(239 - (239 - 34) * ratio); // От красного (239, 68, 68) к зеленому (34, 197, 94)
+                const g = Math.round(68 + (197 - 68) * ratio);
+                const b = Math.round(68 + (94 - 68) * ratio);
+                return { r, g, b };
+            };
+            
+            managersArray.forEach((m, index) => {
+                const tr = document.createElement('tr');
+                tr.className = 'bg-slate-900 hover:bg-slate-800/80 transition text-xs';
+                
+                // Форматируем дату худшего дня
+                const worstDayDate = m.worstDay.date.split('-');
+                const worstDayFormatted = `${worstDayDate[2]}.${worstDayDate[1]}.${worstDayDate[0]}`;
+                
+                // Цвета для градиентной раскраски
+                const durationColor = getColor(m.avgDuration, minDuration, maxDuration);
+                const lastTimeColor = getColor(m.avgLast, minLastTime, maxLastTime);
+                const ordersColor = getColor(m.totalOrders, minOrders, maxOrders);
+                
+                tr.innerHTML = `
+                    <td class="px-3 py-2 rounded-l-xl font-medium">${m.manager}</td>
+                    <td class="px-3 py-2 text-right">${formatTime(m.avgFirst)}</td>
+                    <td class="px-3 py-2 text-right" style="color: rgb(${lastTimeColor.r}, ${lastTimeColor.g}, ${lastTimeColor.b})">${formatTime(m.avgLast)}</td>
+                    <td class="px-3 py-2 text-right text-emerald-400">${formatTime(m.earliestFirst)}</td>
+                    <td class="px-3 py-2 text-right text-amber-400">${formatTime(m.latestLast)}</td>
+                    <td class="px-3 py-2 text-right text-red-400" title="Самое позднее начало работы">
+                        ${worstDayFormatted} ${formatTime(m.worstDay.time)}
+                    </td>
+                    <td class="px-3 py-2 text-right" style="color: rgb(${durationColor.r}, ${durationColor.g}, ${durationColor.b})">${formatTime(m.avgDuration)}</td>
+                    <td class="px-3 py-2 text-right">${formatMoney(m.totalDays)}</td>
+                    <td class="px-3 py-2 text-right rounded-r-xl" style="color: rgb(${ordersColor.r}, ${ordersColor.g}, ${ordersColor.b})">${formatMoney(m.totalOrders)}</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+            
+            // Создаем график
+            updatePerformanceChart(managersArray);
+            
+            // Обновляем топ-5 лучших и худших
+            updateTopEmployees(managersArray);
+        }
+        
+        // Обновление топ-5 лучших и худших сотрудников
+        function updateTopEmployees(managersArray) {
+            if (managersArray.length === 0) {
+                document.getElementById('topBestEmployees').innerHTML = '<div class="text-xs text-slate-400 text-center py-4">Нет данных</div>';
+                document.getElementById('topWorstEmployees').innerHTML = '<div class="text-xs text-slate-400 text-center py-4">Нет данных</div>';
+                return;
+            }
+            
+            // Рассчитываем общий рейтинг на основе основных показателей
+            const managersWithScore = managersArray.map(m => {
+                // Нормализуем показатели (0-1)
+                const durations = managersArray.map(m => m.avgDuration);
+                const lastTimes = managersArray.map(m => m.avgLast);
+                const orders = managersArray.map(m => m.totalOrders);
+                
+                const minDuration = Math.min(...durations);
+                const maxDuration = Math.max(...durations);
+                const minLastTime = Math.min(...lastTimes);
+                const maxLastTime = Math.max(...lastTimes);
+                const minOrders = Math.min(...orders);
+                const maxOrders = Math.max(...orders);
+                
+                const durationScore = maxDuration > minDuration 
+                    ? (m.avgDuration - minDuration) / (maxDuration - minDuration) 
+                    : 0.5;
+                const lastTimeScore = maxLastTime > minLastTime 
+                    ? (m.avgLast - minLastTime) / (maxLastTime - minLastTime) 
+                    : 0.5;
+                const ordersScore = maxOrders > minOrders 
+                    ? (m.totalOrders - minOrders) / (maxOrders - minOrders) 
+                    : 0.5;
+                
+                // Общий рейтинг (среднее взвешенное)
+                const totalScore = (durationScore * 0.3 + lastTimeScore * 0.3 + ordersScore * 0.4);
+                
+                return {
+                    ...m,
+                    score: totalScore
+                };
+            });
+            
+            // Сортируем по рейтингу
+            const sortedByScore = [...managersWithScore].sort((a, b) => b.score - a.score);
+            
+            // Топ-5 лучших
+            const topBest = sortedByScore.slice(0, 5);
+            const bestContainer = document.getElementById('topBestEmployees');
+            bestContainer.innerHTML = '';
+            
+            if (topBest.length === 0) {
+                bestContainer.innerHTML = '<div class="text-xs text-slate-400 text-center py-4">Нет данных</div>';
+            } else {
+                topBest.forEach((m, index) => {
+                    const div = document.createElement('div');
+                    div.className = 'bg-slate-900/80 rounded-xl p-3 border border-emerald-500/30';
+                    div.innerHTML = `
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center gap-2">
+                                <span class="text-lg font-bold text-emerald-400">${index + 1}</span>
+                                <span class="text-xs font-semibold text-slate-200">${m.manager}</span>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2 text-[10px]">
+                            <div>
+                                <div class="text-slate-500">Длительность</div>
+                                <div class="text-emerald-400 font-medium">${formatTime(m.avgDuration)}</div>
+                            </div>
+                            <div>
+                                <div class="text-slate-500">Последняя</div>
+                                <div class="text-sky-400 font-medium">${formatTime(m.avgLast)}</div>
+                            </div>
+                            <div>
+                                <div class="text-slate-500">Заявок</div>
+                                <div class="text-indigo-400 font-medium">${formatMoney(m.totalOrders)}</div>
+                            </div>
+                        </div>
+                    `;
+                    bestContainer.appendChild(div);
+                });
+            }
+            
+            // Топ-5 худших
+            const topWorst = sortedByScore.slice(-5).reverse();
+            const worstContainer = document.getElementById('topWorstEmployees');
+            worstContainer.innerHTML = '';
+            
+            if (topWorst.length === 0) {
+                worstContainer.innerHTML = '<div class="text-xs text-slate-400 text-center py-4">Нет данных</div>';
+            } else {
+                topWorst.forEach((m, index) => {
+                    const div = document.createElement('div');
+                    div.className = 'bg-slate-900/80 rounded-xl p-3 border border-red-500/30';
+                    div.innerHTML = `
+                        <div class="flex items-center justify-between mb-2">
+                            <div class="flex items-center gap-2">
+                                <span class="text-lg font-bold text-red-400">${index + 1}</span>
+                                <span class="text-xs font-semibold text-slate-200">${m.manager}</span>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2 text-[10px]">
+                            <div>
+                                <div class="text-slate-500">Длительность</div>
+                                <div class="text-red-400 font-medium">${formatTime(m.avgDuration)}</div>
+                            </div>
+                            <div>
+                                <div class="text-slate-500">Последняя</div>
+                                <div class="text-orange-400 font-medium">${formatTime(m.avgLast)}</div>
+                            </div>
+                            <div>
+                                <div class="text-slate-500">Заявок</div>
+                                <div class="text-yellow-400 font-medium">${formatMoney(m.totalOrders)}</div>
+                            </div>
+                        </div>
+                    `;
+                    worstContainer.appendChild(div);
+                });
+            }
+        }
+
+        // Обновление графика
+        function updatePerformanceChart(managersArray) {
+            const ctx = document.getElementById('performanceChart')?.getContext('2d');
+            if (!ctx || typeof Chart === 'undefined') return;
+            
+            if (window.performanceChart && typeof window.performanceChart.destroy === 'function') {
+                window.performanceChart.destroy();
+            }
+            
+            const labels = managersArray.map(m => m.manager);
+            const firstTimes = managersArray.map(m => m.avgFirst);
+            const lastTimes = managersArray.map(m => m.avgLast);
+            
+            window.performanceChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Среднее время первой заявки',
+                            data: firstTimes,
+                            backgroundColor: 'rgba(16, 185, 129, 0.6)',
+                            borderColor: 'rgb(16, 185, 129)',
+                            borderWidth: 2
+                        },
+                        {
+                            label: 'Среднее время последней заявки',
+                            data: lastTimes,
+                            backgroundColor: 'rgba(56, 189, 248, 0.6)',
+                            borderColor: 'rgb(56, 189, 248)',
+                            borderWidth: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            labels: { 
+                                color: '#e5e7eb', 
+                                font: { size: 11 }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return context.dataset.label + ': ' + formatTime(context.parsed.y);
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            ticks: { 
+                                color: '#9ca3af', 
+                                font: { size: 10 },
+                                maxRotation: 45,
+                                minRotation: 45
+                            },
+                            grid: { 
+                                display: false,
+                                color: '#1f2937'
+                            }
+                        },
+                        y: {
+                            min: 0,
+                            max: 24,
+                            ticks: {
+                                color: '#9ca3af',
+                                font: { size: 11 },
+                                callback: function(value) {
+                                    return formatTime(value);
+                                }
+                            },
+                            grid: { 
+                                color: '#1f2937',
+                                drawBorder: false
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Установка дат по умолчанию
+        function setDefaultDates() {
+            const startDateEl = document.getElementById('startDate');
+            const endDateEl = document.getElementById('endDate');
+            
+            // Находим минимальную и максимальную дату
+            const dates = allOrders
+                .map(o => parseDate(o['Дата']))
+                .filter(d => d !== null)
+                .map(d => new Date(d.year, d.month - 1, d.day));
+            
+            if (dates.length > 0) {
+                const minDate = new Date(Math.min(...dates));
+                const maxDate = new Date(Math.max(...dates));
+                
+                startDateEl.setAttribute('min', minDate.toISOString().split('T')[0]);
+                startDateEl.setAttribute('max', maxDate.toISOString().split('T')[0]);
+                endDateEl.setAttribute('min', minDate.toISOString().split('T')[0]);
+                endDateEl.setAttribute('max', maxDate.toISOString().split('T')[0]);
+                
+                // Устанавливаем последние 3 месяца по умолчанию
+                const last3Months = new Date(maxDate);
+                last3Months.setMonth(last3Months.getMonth() - 2);
+                last3Months.setDate(1);
+                
+                if (last3Months >= minDate) {
+                    startDateEl.value = last3Months.toISOString().split('T')[0];
+                    endDateEl.value = maxDate.toISOString().split('T')[0];
+                } else {
+                    startDateEl.value = minDate.toISOString().split('T')[0];
+                    endDateEl.value = maxDate.toISOString().split('T')[0];
+                }
+            }
+        }
+
+        // Инициализация
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('reportDate').textContent = new Date().toLocaleDateString('ru-RU');
+            
+            // Обработчики фильтров
+            document.getElementById('startDate').addEventListener('change', applyFilters);
+            document.getElementById('endDate').addEventListener('change', applyFilters);
+            document.getElementById('regionFilter').addEventListener('change', applyFilters);
+            document.getElementById('excludeWeekends').addEventListener('change', function() {
+                updatePerformanceReport();
+            });
+            document.getElementById('clearDateFilter').addEventListener('click', function() {
+                document.getElementById('startDate').value = '';
+                document.getElementById('endDate').value = '';
+                applyFilters();
+            });
+            
+            loadData();
+        });
+    </script>
+</body>
+</html>
+

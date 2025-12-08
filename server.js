@@ -96,7 +96,7 @@ const server = http.createServer((req, res) => {
     }
     
     // Для HTML файлов проверяем авторизацию (кроме public файлов)
-    if (filePath === './index.html') {
+    if (filePath === './index.html' || filePath === './performance.html') {
         const cookies = parseCookies(req.headers.cookie);
         if (!isAuthorized(cookies)) {
             // Отдаем страницу с формой входа
